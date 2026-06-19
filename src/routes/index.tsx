@@ -1,6 +1,6 @@
 import { createRoute } from "@tanstack/react-router";
 import { WorkspaceProvider } from "@/components/workspace/workspace-context";
-import { WorkspaceLayout } from "@/components/workspace/workspace-layout";
+import { Workspace } from "@/components/workspace/workspace";
 import { rootRoute } from "@/routes/__root";
 
 function HomePage() {
@@ -10,7 +10,7 @@ function HomePage() {
       initialSortKeys={["title"]}
       initialSortDirection="asc"
     >
-      <WorkspaceLayout />
+      <Workspace />
     </WorkspaceProvider>
   );
 }

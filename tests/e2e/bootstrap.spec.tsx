@@ -44,8 +44,8 @@ describe("app shell", () => {
     ).toBeInTheDocument();
   });
 
-  // AC-014 — behavior: the bootstrap demo shell (nav, greeting, palette) is gone
-  it("should not render the bootstrap demo nav or command palette at the home route", async () => {
+  // behavior: the bootstrap demo nav is gone and the palette stays closed at rest
+  it("should not render the bootstrap demo nav or an open command palette at the home route", async () => {
     renderApp("/");
 
     await screen.findByRole("list", { name: /playlist/i });
@@ -55,15 +55,15 @@ describe("app shell", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  // AC-014 — behavior: Mod+K no longer toggles a command palette
-  it("should not open a command palette when Mod+K is pressed", async () => {
+  // behavior: Mod+K opens the command palette from the home route
+  it("should open the command palette when Mod+K is pressed", async () => {
     const user = userEvent.setup();
     renderApp("/");
     await screen.findByRole("list", { name: /playlist/i });
 
     await user.keyboard("{Control>}k{/Control}");
 
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 
   it("should render a not-found view for an unknown route", async () => {
