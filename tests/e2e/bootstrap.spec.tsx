@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   createRouter,
@@ -11,15 +11,10 @@ import { AppProviders } from "@/app/providers";
 import { rootRoute } from "@/routes/__root";
 import { indexRoute } from "@/routes/index";
 import { settingsRoute } from "@/routes/settings";
-import { invoke } from "@tauri-apps/api/core";
 
-// Mock the IPC boundary only (no Tauri host under jsdom). The SUT - routes,
-// providers, the greet() wrapper, and the command palette - stay real.
+// No Tauri host under jsdom; the greet IPC wrapper stays wired but is unused by
+// the player shell, so a stub keeps the boundary from throwing if ever called.
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
-
-const invokeMock = vi.mocked(invoke);
-
-const GREETING = "Hello, World! Greetings from Tauri.";
 
 function renderApp(initialPath = "/") {
   const routeTree = rootRoute.addChildren([indexRoute, settingsRoute]);
@@ -36,113 +31,53 @@ function renderApp(initialPath = "/") {
   return { ...result, router };
 }
 
-describe("bootstrap scaffold", () => {
-  beforeEach(() => {
-    invokeMock.mockReset();
-    invokeMock.mockResolvedValue(GREETING);
-  });
-
-  // TC-001 / AC-006 — behavior
-  it("should render the home route with a heading and a button if the app launches", async () => {
+describe("app shell", () => {
+  // AC-001, AC-002, TC-001 — behavior: the player workspace renders at the home route
+  it("should render the player workspace at the home route on launch", async () => {
     renderApp("/");
 
     expect(
-      await screen.findByRole("heading", { name: /home/i }),
+      await screen.findByRole("list", { name: /playlist/i }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button")).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: /video viewport/i }),
+    ).toBeInTheDocument();
   });
 
-  // TC-002 / AC-003 — behavior
-  it("should switch to settings content if the settings nav link is clicked", async () => {
-    const user = userEvent.setup();
+  // AC-014 — behavior: the bootstrap demo shell (nav, greeting, palette) is gone
+  it("should not render the bootstrap demo nav or command palette at the home route", async () => {
     renderApp("/");
 
-    await screen.findByRole("heading", { name: /home/i });
-
-    await user.click(screen.getByRole("link", { name: /settings/i }));
-
+    await screen.findByRole("list", { name: /playlist/i });
     expect(
-      await screen.findByRole("heading", { name: /settings/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("link", { name: /^home$/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  // TC-002 / AC-003 — behavior
-  it("should return to the home route if the home nav link is clicked from settings", async () => {
+  // AC-014 — behavior: Mod+K no longer toggles a command palette
+  it("should not open a command palette when Mod+K is pressed", async () => {
     const user = userEvent.setup();
-    renderApp("/settings");
+    renderApp("/");
+    await screen.findByRole("list", { name: /playlist/i });
 
-    await screen.findByRole("heading", { name: /settings/i });
+    await user.keyboard("{Control>}k{/Control}");
 
-    await user.click(screen.getByRole("link", { name: /^home$/i }));
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole("heading", { name: /home/i }),
-      ).toBeInTheDocument();
-    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  // TC-002 / AC-003 edge case — behavior
-  it("should render a not-found view if an unknown route is navigated", async () => {
+  it("should render a not-found view for an unknown route", async () => {
     renderApp("/this-route-does-not-exist");
 
     expect(await screen.findByText(/404/i)).toBeInTheDocument();
     expect(screen.getByText(/does not exist/i)).toBeInTheDocument();
   });
 
-  // TC-003 / AC-004, AC-007 — side-effect-contract: greet() invokes the "greet" command
-  it("should resolve the greeting query and render the greeting text if greet succeeds", async () => {
-    renderApp("/");
+  it("should render the settings route content", async () => {
+    renderApp("/settings");
 
-    expect(await screen.findByText(GREETING)).toBeInTheDocument();
-    expect(invokeMock).toHaveBeenCalledWith("greet", { name: "World" });
-  });
-
-  // UI state Loading -> Success (spec section 6) — behavior
-  it("should show a loading placeholder then the greeting if the greet query is pending then resolves", async () => {
-    let resolveGreet: ((value: string) => void) | undefined;
-    invokeMock.mockReturnValue(
-      new Promise<string>((resolve) => {
-        resolveGreet = resolve;
-      }),
-    );
-
-    renderApp("/");
-
-    expect(await screen.findByText(/loading/i)).toBeInTheDocument();
-
-    resolveGreet?.(GREETING);
-
-    expect(await screen.findByText(GREETING)).toBeInTheDocument();
-  });
-
-  // Edge case "greet rejects" / spec section 6 Error — behavior: inline error, no crash
-  it("should show an inline error and keep the app alive if the greet command rejects", async () => {
-    invokeMock.mockRejectedValue(new Error("IPC failed"));
-    renderApp("/");
-
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
-    // app stays alive: home heading still present, no white screen
-    expect(screen.getByRole("heading", { name: /home/i })).toBeInTheDocument();
-  });
-
-  // TC-004 / AC-005 — behavior: jsdom resolves Mod -> Control (requi learnings)
-  it("should toggle the command palette dialog if the Mod+K hotkey is pressed", async () => {
-    const user = userEvent.setup();
-    renderApp("/");
-
-    await screen.findByRole("heading", { name: /home/i });
-
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-
-    await user.keyboard("{Control>}k{/Control}");
-    await waitFor(() => {
-      expect(screen.getByRole("dialog")).toBeInTheDocument();
-    });
-
-    await user.keyboard("{Control>}k{/Control}");
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    });
+    expect(
+      await screen.findByRole("heading", { name: /settings/i }),
+    ).toBeInTheDocument();
   });
 });

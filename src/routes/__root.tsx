@@ -1,21 +1,9 @@
 import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
-import { CommandPalette } from "@/components/command-palette";
 
 function RootLayout() {
   return (
-    <div className="flex h-full flex-col">
-      <nav className="flex items-center gap-4 border-b px-4 py-2 text-sm">
-        <Link to="/" className="[&.active]:font-semibold">
-          Home
-        </Link>
-        <Link to="/settings" className="[&.active]:font-semibold">
-          Settings
-        </Link>
-      </nav>
-      <main className="flex-1 overflow-auto p-6">
-        <Outlet />
-      </main>
-      <CommandPalette />
+    <div className="h-full w-full">
+      <Outlet />
     </div>
   );
 }

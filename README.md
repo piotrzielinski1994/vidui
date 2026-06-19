@@ -39,11 +39,16 @@ npm install
 
 Rust backend tests: `cd src-tauri && cargo test`.
 
-> This is a **scaffold**: the home route renders a heading, a shadcn Button, and a
-> greeting block backed by a TanStack Query that calls the `greet` Tauri command (proves
-> IPC). A `/settings` route + in-app nav demonstrate routing. `Mod+K` (Cmd on macOS, Ctrl
-> elsewhere) toggles a placeholder command-palette dialog via TanStack Hotkeys. No real
-> video playback yet - that arrives as the first post-bootstrap feature.
+> The home route renders the **player workspace shell**: a resizable layout with a flat
+> playlist sidebar (the open video files, one row each, with a sort toggle in the header),
+> a video viewport, and a transport bar (prev / play-pause / next + a time readout, with
+> the inert progress indicator drawn as the bar's top border). It is driven by mock data
+> with no real playback - playback, a real open-file flow, and persistence arrive as later
+> features. The sort control toggles ascending/descending with natural numeric ordering (a
+> numeric filename prefix sorts by value, so `3` precedes `21`). All UI state (selection,
+> active video, play/pause, sort direction) is shared via a `WorkspaceProvider` context (no
+> prop drilling). The `/settings` route still exists (no in-UI link yet); the `greet` Tauri
+> command stays wired as the IPC proof for later use.
 
 ## Repo layout
 
@@ -53,10 +58,10 @@ src/
   main.tsx              React entry: providers + RouterProvider
   router.tsx            Code-based TanStack Router assembly
   app/providers.tsx     QueryClientProvider + HotkeysProvider
-  routes/               __root (layout + nav + 404), index (home + greet demo), settings
+  routes/               __root (layout + 404), index (player workspace), settings
   components/
-    command-palette.tsx Mod+K hotkey demo (toggles a placeholder dialog)
-    ui/                 shadcn primitives (button)
+    workspace/          player shell: context, flat video-list, sort-natural, viewport, transport bar, mock data
+    ui/                 shadcn primitives (button, badge, scroll-area, resizable)
   lib/                  tauri.ts (typed invoke wrappers), utils.ts (cn)
   index.css             Tailwind v4 + theme tokens
   test/setup.ts         Vitest + Testing Library setup
