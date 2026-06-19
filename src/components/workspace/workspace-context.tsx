@@ -18,12 +18,16 @@ type WorkspaceContextValue = {
   isPlaying: boolean;
   sortKeys: SortField[];
   sortDirection: SortDirection;
+  isSidebarVisible: boolean;
+  isTransportVisible: boolean;
   selectNode: (id: string) => void;
   togglePlay: () => void;
   nextVideo: () => void;
   prevVideo: () => void;
   toggleSortKey: (field: SortField) => void;
   toggleSortDirection: () => void;
+  toggleSidebar: () => void;
+  toggleTransport: () => void;
 };
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -53,6 +57,8 @@ export function WorkspaceProvider({
   const [sortKeys, setSortKeys] = useState<SortField[]>(initialSortKeys);
   const [sortDirection, setSortDirection] =
     useState<SortDirection>(initialSortDirection);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+  const [isTransportVisible, setIsTransportVisible] = useState(true);
 
   const playlist = useMemo(
     () => sortVideos(videos, sortKeys, sortDirection),
@@ -84,6 +90,8 @@ export function WorkspaceProvider({
       isPlaying,
       sortKeys,
       sortDirection,
+      isSidebarVisible,
+      isTransportVisible,
       selectNode: (id) => {
         setSelectedNodeId(id);
         setActiveVideoId(id);
@@ -99,8 +107,19 @@ export function WorkspaceProvider({
         ),
       toggleSortDirection: () =>
         setSortDirection((current) => (current === "asc" ? "desc" : "asc")),
+      toggleSidebar: () => setIsSidebarVisible((visible) => !visible),
+      toggleTransport: () => setIsTransportVisible((visible) => !visible),
     };
-  }, [playlist, selectedNodeId, activeVideoId, isPlaying, sortKeys, sortDirection]);
+  }, [
+    playlist,
+    selectedNodeId,
+    activeVideoId,
+    isPlaying,
+    sortKeys,
+    sortDirection,
+    isSidebarVisible,
+    isTransportVisible,
+  ]);
 
   return (
     <WorkspaceContext.Provider value={value}>

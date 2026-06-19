@@ -31,6 +31,14 @@ function Probe() {
       <output aria-label="playing">{String(ws.isPlaying)}</output>
       <output aria-label="direction">{ws.sortDirection}</output>
       <output aria-label="keys">{ws.sortKeys.join(",") || "none"}</output>
+      <output aria-label="sidebar-visible">
+        {String(ws.isSidebarVisible)}
+      </output>
+      <output aria-label="transport-visible">
+        {String(ws.isTransportVisible)}
+      </output>
+      <button onClick={() => ws.toggleSidebar()}>do-toggle-sidebar</button>
+      <button onClick={() => ws.toggleTransport()}>do-toggle-transport</button>
       <button onClick={() => ws.toggleSortKey("title")}>key-title</button>
       <button onClick={() => ws.toggleSortKey("type")}>key-type</button>
       <button onClick={() => ws.toggleSortDirection()}>flip-dir</button>
@@ -246,6 +254,56 @@ describe("workspace context", () => {
 
     await user.click(screen.getByRole("button", { name: "do-play" }));
     expect(screen.getByLabelText("playing")).toHaveTextContent("false");
+  });
+
+  // behavior: panels default to visible (open shell) if just mounted
+  it("should default both sidebar and transport to visible if just mounted", () => {
+    renderProbe({ videos: fixtureVideos });
+
+    expect(screen.getByLabelText("sidebar-visible")).toHaveTextContent("true");
+    expect(screen.getByLabelText("transport-visible")).toHaveTextContent(
+      "true",
+    );
+  });
+
+  // side-effect-contract: toggleSidebar flips sidebar visibility, leaving transport untouched
+  it("should flip only sidebar visibility if toggleSidebar is called", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: fixtureVideos });
+
+    await user.click(screen.getByRole("button", { name: "do-toggle-sidebar" }));
+
+    expect(screen.getByLabelText("sidebar-visible")).toHaveTextContent("false");
+    expect(screen.getByLabelText("transport-visible")).toHaveTextContent(
+      "true",
+    );
+  });
+
+  // side-effect-contract: toggleTransport flips transport visibility, leaving sidebar untouched
+  it("should flip only transport visibility if toggleTransport is called", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: fixtureVideos });
+
+    await user.click(
+      screen.getByRole("button", { name: "do-toggle-transport" }),
+    );
+
+    expect(screen.getByLabelText("transport-visible")).toHaveTextContent(
+      "false",
+    );
+    expect(screen.getByLabelText("sidebar-visible")).toHaveTextContent("true");
+  });
+
+  // side-effect-contract: toggling a panel twice restores it (hide then show)
+  it("should restore the sidebar if toggleSidebar is called twice", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: fixtureVideos });
+
+    const toggle = screen.getByRole("button", { name: "do-toggle-sidebar" });
+    await user.click(toggle);
+    await user.click(toggle);
+
+    expect(screen.getByLabelText("sidebar-visible")).toHaveTextContent("true");
   });
 
   // behavior: re-selecting the already-active video keeps it active + selected (E-2)

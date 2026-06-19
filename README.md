@@ -48,7 +48,10 @@ Rust backend tests: `cd src-tauri && cargo test`.
 > numeric filename prefix sorts by value, so `3` precedes `21`). All UI state (selection,
 > active video, play/pause, sort direction) is shared via a `WorkspaceProvider` context (no
 > prop drilling). The `/settings` route still exists (no in-UI link yet); the `greet` Tauri
-> command stays wired as the IPC proof for later use.
+> command stays wired as the IPC proof for later use. A `Mod+K` command palette (cmdk) lists
+> the workspace actions (play/pause, next, prev, toggle sort, toggle sidebar, toggle transport
+> bar); each action also has its own global hotkey. Bindings are fixed defaults - no user
+> remapping or persistence yet (panel visibility resets on reload).
 
 ## Repo layout
 
@@ -60,9 +63,9 @@ src/
   app/providers.tsx     QueryClientProvider + HotkeysProvider
   routes/               __root (layout + 404), index (player workspace), settings
   components/
-    workspace/          player shell: context, flat video-list, sort-natural, viewport, transport bar, mock data
-    ui/                 shadcn primitives (button, badge, scroll-area, resizable)
-  lib/                  tauri.ts (typed invoke wrappers), utils.ts (cn)
+    workspace/          player shell: context, flat video-list, sort-natural, viewport, transport bar, mock data, command palette
+    ui/                 shadcn primitives (button, badge, scroll-area, resizable, command, dialog)
+  lib/                  tauri.ts (typed invoke wrappers), utils.ts (cn), shortcuts/ (action registry + global hotkeys)
   index.css             Tailwind v4 + theme tokens
   test/setup.ts         Vitest + Testing Library setup
 src-tauri/              Rust desktop shell (greet command, tauri.conf.json)
