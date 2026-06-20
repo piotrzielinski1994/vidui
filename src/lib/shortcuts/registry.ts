@@ -1,5 +1,6 @@
 export type ShortcutActionId =
   | "open-command-palette"
+  | "open-files"
   | "toggle-play"
   | "next-video"
   | "prev-video"
@@ -22,10 +23,16 @@ export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = [
     defaultHotkey: "Mod+K",
   },
   {
+    id: "open-files",
+    name: "Open files",
+    description: "Open video files and load them into the playlist.",
+    defaultHotkey: "Mod+O",
+  },
+  {
     id: "toggle-play",
     name: "Play / pause",
     description: "Toggle playback of the active video.",
-    defaultHotkey: "Mod+P",
+    defaultHotkey: "Space",
   },
   {
     id: "next-video",

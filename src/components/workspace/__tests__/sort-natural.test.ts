@@ -7,7 +7,6 @@ import {
   compositeFixture,
   compositeTitleAscNames,
   compositeTypeTitleAscNames,
-  compositeDurationAscNames,
 } from "./fixtures";
 
 const make = (
@@ -17,8 +16,7 @@ const make = (
   id: name,
   name,
   format: "MP4",
-  resolution: "1080p",
-  durationSec: 1,
+  path: `/videos/${name}.mp4`,
   ...overrides,
 });
 
@@ -64,7 +62,7 @@ describe("sortVideos", () => {
     expect(result).toEqual(["alpha", "Bravo", "Charlie"]);
   });
 
-  // behavior: mixing prefixed and non-prefixed names must not throw (E-5/AC-010)
+  // behavior: mixing prefixed and non-prefixed names must not throw (E-5)
   it("should sort a mix of prefixed and non-prefixed names without throwing if some names lack a numeric prefix", () => {
     const input = [
       make("apple"),
@@ -79,7 +77,7 @@ describe("sortVideos", () => {
     expect(names(run())).toHaveLength(4);
   });
 
-  // behavior: a [type, title] chain groups by format string then natural title within each group (AC-010)
+  // behavior: a [type, title] chain groups by format string then natural title within each group
   it("should group by format then order by natural title within a format if keys is [type, title]", () => {
     const result = names(sortVideos(compositeFixture, ["type", "title"], "asc"));
 
@@ -97,45 +95,20 @@ describe("sortVideos", () => {
     expect(typeThenTitle).not.toEqual(titleOnly);
   });
 
-  // behavior: the duration key orders by numeric durationSec, not by name text
-  it("should order by numeric durationSec if keys is [duration]", () => {
-    const result = names(sortVideos(compositeFixture, ["duration"], "asc"));
-
-    expect(result).toEqual(compositeDurationAscNames);
-  });
-
-  // behavior: the resolution key compares the resolution string
-  it("should order by resolution string if keys is [resolution]", () => {
-    const input = [
-      make("a", { resolution: "720p" }),
-      make("b", { resolution: "1080p" }),
-      make("c", { resolution: "480p" }),
-    ];
-
-    const result = sortVideos(input, ["resolution"], "asc").map(
-      (v) => v.resolution,
-    );
-
-    // string compare: "1080p" < "480p" < "720p"
-    expect(result).toEqual(["1080p", "480p", "720p"]);
-  });
-
   // behavior: an equal primary key falls through to the next key in the chain
   it("should fall through to the next key if videos are equal on the primary key", () => {
     const input = [
-      make("same", { format: "MP4", durationSec: 30 }),
-      make("same", { format: "MP4", durationSec: 10 }),
-      make("same", { format: "MP4", durationSec: 20 }),
+      make("3 - same", { format: "MP4" }),
+      make("1 - same", { format: "MP4" }),
+      make("2 - same", { format: "MP4" }),
     ];
 
-    const result = sortVideos(input, ["type", "duration"], "asc").map(
-      (v) => v.durationSec,
-    );
+    const result = names(sortVideos(input, ["type", "title"], "asc"));
 
-    expect(result).toEqual([10, 20, 30]);
+    expect(result).toEqual(["1 - same", "2 - same", "3 - same"]);
   });
 
-  // behavior: empty keys returns the videos in their original (open) order (AC-010)
+  // behavior: empty keys returns the videos in their original (open) order
   it("should return videos in original order if keys is empty", () => {
     const result = names(sortVideos(compositeFixture, [], "asc"));
 
@@ -149,7 +122,7 @@ describe("sortVideos", () => {
     expect(result).toEqual(names(compositeFixture));
   });
 
-  // behavior: direction desc reverses the entire composite comparison result (AC-010)
+  // behavior: direction desc reverses the entire composite comparison result
   it("should reverse the whole composite order if direction is desc", () => {
     const asc = names(sortVideos(compositeFixture, ["type", "title"], "asc"));
     const desc = names(sortVideos(compositeFixture, ["type", "title"], "desc"));
@@ -178,9 +151,9 @@ describe("sortVideos", () => {
     expect(names(result)).toEqual(names(input));
   });
 
-  // type-contract: SortField is the documented union (compile-time guard via assignment)
+  // type-contract: SortField is now the narrowed union "title" | "type" only
   it("should accept every documented SortField in keys if used as a chain", () => {
-    const keys: SortField[] = ["title", "type", "duration", "resolution"];
+    const keys: SortField[] = ["title", "type"];
 
     const run = () => sortVideos(compositeFixture, keys, "asc");
 

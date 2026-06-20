@@ -1,17 +1,12 @@
 import type { VideoNode } from "@/components/workspace/mock-data";
 
-// Flat playlist fixture used by all workspace tests (v0.2 - NO folders/tree).
+// Flat playlist fixture used by all workspace tests (v0.3 - real playback shape).
+// VideoNode now carries a file `path`; mock-only `resolution`/`durationSec` are gone.
 // Open order is deliberately NON-sorted: 1, 21, 3, 9, 12 so that the three
 // orderings are pairwise distinct and a test can tell them apart:
 //   open order    : 1, 21, 3, 9, 12
 //   natural asc   : 1, 3, 9, 12, 21   (numeric prefix by VALUE, not lexical)
 //   lexical asc   : 1, 12, 21, 3, 9   (what a naive string sort would give)
-// Durations are picked so the mm:ss totals are known exactly:
-//   83  -> "01:23"
-//   596 -> "09:56"
-//   125 -> "02:05"
-//   7   -> "00:07"
-//   3661-> "61:01"
 // IDs are stable so initialActiveVideoId is deterministic.
 
 export const fixtureVideos: VideoNode[] = [
@@ -19,36 +14,31 @@ export const fixtureVideos: VideoNode[] = [
     id: "v-1",
     name: "1 - Opening",
     format: "MP4",
-    resolution: "1080p",
-    durationSec: 83,
+    path: "/videos/1 - Opening.mp4",
   },
   {
     id: "v-21",
     name: "21 - Finale",
     format: "AVI",
-    resolution: "2160p",
-    durationSec: 596,
+    path: "/videos/21 - Finale.avi",
   },
   {
     id: "v-3",
     name: "3 - Intro",
     format: "MOV",
-    resolution: "720p",
-    durationSec: 125,
+    path: "/videos/3 - Intro.mov",
   },
   {
     id: "v-9",
     name: "9 - Interlude",
     format: "WEBM",
-    resolution: "480p",
-    durationSec: 7,
+    path: "/videos/9 - Interlude.webm",
   },
   {
     id: "v-12",
     name: "12 - Bridge",
     format: "MKV",
-    resolution: "1440p",
-    durationSec: 3661,
+    path: "/videos/12 - Bridge.mkv",
   },
 ];
 
@@ -79,54 +69,47 @@ export const singleVideoList: VideoNode[] = [
     id: "solo",
     name: "5 - Lonely",
     format: "MP4",
-    resolution: "1080p",
-    durationSec: 42,
+    path: "/videos/5 - Lonely.mp4",
   },
 ];
 
-// Composite-sort fixture (v0.2 - multi-field tie-break chain). Designed so the
+// Composite-sort fixture (multi-field tie-break chain). Designed so the
 // three relevant orderings are pairwise distinct, proving a [type, title] chain
 // differs from a title-only chain:
 //   - >=2 videos share a format (MP4 x3, AVI x2) with different numeric prefixes
 //   - formats interleave in title order so grouping-by-type reshuffles the list
 // Format strings compare alphabetically: AVI < MKV < MOV < MP4 < WEBM.
-// Open order is deliberately scrambled. Durations are unique so [duration]
-// gives a fully-determined numeric order.
+// Open order is deliberately scrambled.
 export const compositeFixture: VideoNode[] = [
   {
     id: "c-21",
     name: "21 - mp4 late",
     format: "MP4",
-    resolution: "720p",
-    durationSec: 100,
+    path: "/videos/21 - mp4 late.mp4",
   },
   {
     id: "c-3",
     name: "3 - mp4 early",
     format: "MP4",
-    resolution: "1080p",
-    durationSec: 50,
+    path: "/videos/3 - mp4 early.mp4",
   },
   {
     id: "c-2",
     name: "2 - avi mid",
     format: "AVI",
-    resolution: "480p",
-    durationSec: 200,
+    path: "/videos/2 - avi mid.avi",
   },
   {
     id: "c-10",
     name: "10 - avi late",
     format: "AVI",
-    resolution: "2160p",
-    durationSec: 30,
+    path: "/videos/10 - avi late.avi",
   },
   {
     id: "c-1",
     name: "1 - mp4 first",
     format: "MP4",
-    resolution: "1440p",
-    durationSec: 300,
+    path: "/videos/1 - mp4 first.mp4",
   },
 ];
 
@@ -147,13 +130,4 @@ export const compositeTypeTitleAscNames = [
   "1 - mp4 first",
   "3 - mp4 early",
   "21 - mp4 late",
-];
-
-// [duration] ascending: numeric durationSec 30,50,100,200,300.
-export const compositeDurationAscNames = [
-  "10 - avi late",
-  "3 - mp4 early",
-  "21 - mp4 late",
-  "2 - avi mid",
-  "1 - mp4 first",
 ];

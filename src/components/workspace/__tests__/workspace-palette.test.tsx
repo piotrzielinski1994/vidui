@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
@@ -6,6 +6,17 @@ import { HotkeysProvider } from "@tanstack/react-hotkeys";
 import { WorkspaceProvider } from "@/components/workspace/workspace-context";
 import { Workspace } from "@/components/workspace/workspace";
 import { fixtureVideos } from "./fixtures";
+
+// The workspace renders the Viewport, which reaches the Tauri IPC boundary;
+// mock the seam (not the components) so the real <video> can mount under jsdom.
+vi.mock("@/lib/tauri", () => ({
+  prepareMediaUrl: (path: string) => Promise.resolve(`asset://localhost${path}`),
+  openVideoFiles: vi.fn(() => Promise.resolve([])),
+  toggleFullscreen: vi.fn(() => Promise.resolve()),
+  watchFullscreen: vi.fn(() => Promise.resolve(() => {})),
+  watchWindowFocus: vi.fn(() => Promise.resolve(() => {})),
+  focusWebview: vi.fn(() => Promise.resolve()),
+}));
 
 type RenderProps = Omit<
   React.ComponentProps<typeof WorkspaceProvider>,
@@ -82,6 +93,23 @@ describe("Workspace command palette integration", () => {
 
     await waitFor(() => expect(searchInput()).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: /pause/i })).toBeInTheDocument();
+  });
+
+  // side-effect-contract: spacebar toggles play/pause without opening the palette (bug 3)
+  it("should toggle play to pause if the spacebar is pressed in the workspace", async () => {
+    const user = userEvent.setup();
+    renderWorkspace({ videos: fixtureVideos, initialActiveVideoId: "v-1" });
+
+    expect(screen.getByRole("button", { name: /play/i })).toBeInTheDocument();
+
+    await user.keyboard("[Space]");
+
+    expect(searchInput()).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: /pause/i }),
+      ).toBeInTheDocument(),
+    );
   });
 
   // side-effect-contract: the next-video global hotkey advances the active video without opening the palette (AC-006 / TC-005)

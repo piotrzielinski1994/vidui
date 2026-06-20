@@ -41,17 +41,27 @@ Rust backend tests: `cd src-tauri && cargo test`.
 
 > The home route renders the **player workspace shell**: a resizable layout with a flat
 > playlist sidebar (the open video files, one row each, with a sort toggle in the header),
-> a video viewport, and a transport bar (prev / play-pause / next + a time readout, with
-> the inert progress indicator drawn as the bar's top border). It is driven by mock data
-> with no real playback - playback, a real open-file flow, and persistence arrive as later
-> features. The sort control toggles ascending/descending with natural numeric ordering (a
-> numeric filename prefix sorts by value, so `3` precedes `21`). All UI state (selection,
-> active video, play/pause, sort direction) is shared via a `WorkspaceProvider` context (no
-> prop drilling). The `/settings` route still exists (no in-UI link yet); the `greet` Tauri
-> command stays wired as the IPC proof for later use. A `Mod+K` command palette (cmdk) lists
-> the workspace actions (play/pause, next, prev, toggle sort, toggle sidebar, toggle transport
-> bar); each action also has its own global hotkey. Bindings are fixed defaults - no user
-> remapping or persistence yet (panel visibility resets on reload).
+> a video viewport, and a transport bar (prev / play-pause / next + a live time readout, with
+> a seekable progress bar across the bar's top edge - click or drag to scrub). It boots with an empty playlist:
+> `Open files` (`Mod+O`, or the command palette) opens the native picker (filtered to
+> `mp4/mkv/mov/webm/avi`) and **replaces** the playlist with the chosen files, auto-playing the
+> first. The viewport renders a real `<video>`; play/pause, prev/next, and clicking a row all
+> drive playback. Spacebar toggles play/pause. **Universal playback:** every opened file is probed
+> by a Rust `prepare_media` command (ffprobe); H.264/AAC plays directly, anything the webview can't
+> decode (WebM/VP9/MKV/AVI/AV1/Opus) is transcoded on the fly by ffmpeg to a streaming fragmented
+> MP4 that starts playing in under a second. Double-clicking the viewport (or the green button /
+> F11) enters fullscreen, which hides the chrome (sidebar, transport, overlay) and restores the
+> pre-fullscreen visibility on exit. Requires `ffmpeg` on PATH for now (a bundled binary for true
+> standalone is still TODO - see [docs/features/20260620004905-real-playback](docs/features/20260620004905-real-playback/)).
+> The sort control toggles ascending/descending with natural numeric ordering (a
+> numeric filename prefix sorts by value, so `3` precedes `21`). All UI + playback state (selection,
+> active video, play/pause, live current/duration, sort direction, fullscreen) is shared via a
+> `WorkspaceProvider` context (no prop drilling). The `/settings` route still exists (no in-UI link
+> yet); the `greet` Tauri command stays wired as the IPC proof for later use. A `Mod+K` command
+> palette (cmdk) lists the workspace actions (open files, play/pause, next, prev, toggle sort,
+> toggle sidebar, toggle transport bar); each action also has its own global hotkey. Bindings are
+> fixed defaults - no user remapping or persistence yet (playlist + panel visibility reset on reload).
+> Not yet: volume/speed/subtitles, auto-advance on end, playlist persistence, bundled ffmpeg.
 
 ## Repo layout
 
@@ -63,12 +73,12 @@ src/
   app/providers.tsx     QueryClientProvider + HotkeysProvider
   routes/               __root (layout + 404), index (player workspace), settings
   components/
-    workspace/          player shell: context, flat video-list, sort-natural, viewport, transport bar, mock data, command palette
+    workspace/          player shell: context, flat video-list, sort-natural, viewport (real video), transport bar, videos-from-paths, command palette
     ui/                 shadcn primitives (button, badge, scroll-area, resizable, command, dialog)
   lib/                  tauri.ts (typed invoke wrappers), utils.ts (cn), shortcuts/ (action registry + global hotkeys)
   index.css             Tailwind v4 + theme tokens
   test/setup.ts         Vitest + Testing Library setup
-src-tauri/              Rust desktop shell (greet command, tauri.conf.json)
+src-tauri/              Rust desktop shell: greet, media.rs (ffprobe/ffmpeg prepare_media), focus.rs (WKWebView first-responder fix), tauri.conf.json
 tests/e2e/              Behavior smoke tests
 docs/                   spec/plan per feature, ADR, learnings
 ```

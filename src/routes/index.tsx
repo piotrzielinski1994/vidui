@@ -5,11 +5,7 @@ import { rootRoute } from "@/routes/__root";
 
 function HomePage() {
   return (
-    <WorkspaceProvider
-      initialActiveVideoId="v-1"
-      initialSortKeys={["title"]}
-      initialSortDirection="asc"
-    >
+    <WorkspaceProvider initialSortKeys={["title"]} initialSortDirection="asc">
       <Workspace />
     </WorkspaceProvider>
   );

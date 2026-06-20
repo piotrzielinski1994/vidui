@@ -1,37 +1,136 @@
-import { Film } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Film, Loader2 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace/workspace-context";
+import { prepareMediaUrl, toggleFullscreen } from "@/lib/tauri";
+
+function logPlayError(error: unknown) {
+  console.error("video play() rejected", error);
+}
+
+type SourceState =
+  | { status: "ready"; forId: string; url: string }
+  | { status: "error"; forId: string; message: string };
 
 export function Viewport() {
-  const { activeVideo } = useWorkspace();
+  const {
+    activeVideo,
+    isPlaying,
+    seekToSec,
+    isFullscreen,
+    reportProgress,
+    reportEnded,
+  } = useWorkspace();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [source, setSource] = useState<SourceState | null>(null);
 
-  if (!activeVideo) {
-    return (
-      <div
-        role="region"
-        aria-label="Video viewport"
-        className="flex h-full w-full flex-col items-center justify-center gap-2 bg-black text-muted-foreground"
-      >
-        <Film className="size-10" />
-        <p className="text-sm">No video selected</p>
-      </div>
-    );
-  }
+  // Resolve the playable source for the active file. The Rust side probes it and
+  // transcodes unsupported codecs (AV1/VP9/Opus/...) to H.264/AAC, which can take
+  // a few seconds. While the resolved source is not (yet) for the active video,
+  // we render the "preparing" state - no synchronous reset needed.
+  useEffect(() => {
+    if (!activeVideo) {
+      return;
+    }
+    let cancelled = false;
+    const forId = activeVideo.id;
+    prepareMediaUrl(activeVideo.path)
+      .then((url) => {
+        if (!cancelled) {
+          setSource({ status: "ready", forId, url });
+        }
+      })
+      .catch((error) => {
+        console.error("prepare_media failed", error);
+        if (!cancelled) {
+          setSource({ status: "error", forId, message: String(error) });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeVideo?.id]);
+
+  const sourceForActive =
+    activeVideo && source?.forId === activeVideo.id ? source : null;
+
+  useEffect(() => {
+    const element = videoRef.current;
+    if (!element) {
+      return;
+    }
+    if (isPlaying) {
+      void element.play().catch(logPlayError);
+      return;
+    }
+    element.pause();
+  }, [isPlaying, sourceForActive]);
+
+  useEffect(() => {
+    const element = videoRef.current;
+    if (!element || seekToSec === null) {
+      return;
+    }
+    element.currentTime = seekToSec;
+  }, [seekToSec]);
 
   return (
     <div
       role="region"
       aria-label="Video viewport"
+      onDoubleClick={() => void toggleFullscreen()}
       className="relative flex h-full w-full items-center justify-center bg-black"
     >
-      <div className="flex aspect-video max-h-full max-w-full items-center justify-center bg-neutral-900 text-neutral-600">
-        <Film className="size-16" />
-      </div>
-      <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-sm text-white">
-        {activeVideo.name}
-        <span className="ml-2 text-muted-foreground">
-          {activeVideo.resolution}
-        </span>
-      </p>
+      {!activeVideo && (
+        <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+          <Film className="size-10" />
+          <p className="text-sm">No video selected</p>
+        </div>
+      )}
+      {activeVideo && !sourceForActive && (
+        <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+          <Loader2 className="size-10 animate-spin" />
+          <p className="text-sm">Preparing {activeVideo.name}…</p>
+        </div>
+      )}
+      {activeVideo && sourceForActive?.status === "error" && (
+        <div className="flex max-w-md flex-col items-center justify-center gap-2 px-6 text-center text-muted-foreground">
+          <Film className="size-10" />
+          <p className="text-sm font-medium text-white">Could not play this file</p>
+          <p className="text-xs">{sourceForActive.message}</p>
+        </div>
+      )}
+      {activeVideo && sourceForActive?.status === "ready" && (
+        <>
+          <video
+            ref={videoRef}
+            src={sourceForActive.url}
+            className="max-h-full max-w-full"
+            onLoadedData={(event) => {
+              if (isPlaying) {
+                void event.currentTarget.play().catch(logPlayError);
+              }
+            }}
+            onTimeUpdate={(event) =>
+              reportProgress(
+                event.currentTarget.currentTime,
+                event.currentTarget.duration || 0,
+              )
+            }
+            onLoadedMetadata={(event) =>
+              reportProgress(
+                event.currentTarget.currentTime,
+                event.currentTarget.duration || 0,
+              )
+            }
+            onEnded={() => reportEnded()}
+          />
+          {!isFullscreen && (
+            <p className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 text-sm text-white">
+              {activeVideo.name}
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 }

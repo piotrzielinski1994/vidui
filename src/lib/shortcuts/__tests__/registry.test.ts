@@ -13,6 +13,17 @@ describe("shortcut registry", () => {
     expect(opener?.defaultHotkey).toBe("Mod+K");
   });
 
+  // behavior: the new open-files action is registered and bound to Mod+O (AC-001)
+  it("should include an 'open-files' action bound to Mod+O if read", () => {
+    const openFiles = SHORTCUT_ACTIONS.find(
+      (action) => action.id === "open-files",
+    );
+
+    expect(openFiles).toBeDefined();
+    expect(openFiles?.defaultHotkey).toBe("Mod+O");
+    expect(openFiles?.name.trim().length).toBeGreaterThan(0);
+  });
+
   // behavior: visibility toggles are registered with requi-matching bindings (AC-003)
   it("should bind 'toggle-sidebar' to Mod+B and 'toggle-transport' to Mod+J if read", () => {
     const sidebar = SHORTCUT_ACTIONS.find(
