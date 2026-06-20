@@ -36,6 +36,7 @@ type WorkspaceContextValue = {
   isTransportVisible: boolean;
   selectNode: (id: string) => void;
   loadVideos: (videos: VideoNode[]) => void;
+  addVideos: (videos: VideoNode[]) => void;
   togglePlay: () => void;
   nextVideo: () => void;
   prevVideo: () => void;
@@ -94,6 +95,46 @@ export function WorkspaceProvider({
   const wasFullscreen = useRef(false);
   const chromeRef = useRef({ sidebar: true, transport: true });
   const preFullscreenChrome = useRef({ sidebar: true, transport: true });
+  const sourceVideosRef = useRef(sourceVideos);
+  const activeVideoIdRef = useRef(activeVideoId);
+
+  // Mirror durable state into refs so the reference-stable verbs below
+  // (addVideos) can read CURRENT values without going stale - which lets the
+  // drop-subscription effect keep one stable handler instead of re-subscribing.
+  useEffect(() => {
+    sourceVideosRef.current = sourceVideos;
+    activeVideoIdRef.current = activeVideoId;
+  }, [sourceVideos, activeVideoId]);
+
+  // Stable identity ([]-deps). Activates a video and starts playback from 0.
+  const activateVideo = useCallback((id: string) => {
+    setActiveVideoId(id);
+    setSelectedNodeId(id);
+    setIsPlaying(true);
+    setPlaybackCurrentSec(0);
+    setPlaybackDurationSec(0);
+    setSeekToSec(null);
+  }, []);
+
+  // Stable identity so the Workspace drop effect subscribes once. Appends the
+  // imported videos, deduping by id against the current list; activates the
+  // first NEW one only when nothing is active yet (empty-playlist parity).
+  const addVideos = useCallback(
+    (incoming: VideoNode[]) => {
+      const current = sourceVideosRef.current;
+      const fresh = incoming.filter(
+        (video) => !current.some((existing) => existing.id === video.id),
+      );
+      if (fresh.length === 0) {
+        return;
+      }
+      setSourceVideos((videos) => [...videos, ...fresh]);
+      if (activeVideoIdRef.current === null) {
+        activateVideo(fresh[0].id);
+      }
+    },
+    [activateVideo],
+  );
 
   // Mirror the live visibility into a ref so setFullscreen (stable, []-deps) can
   // read the CURRENT windowed values without going stale.
@@ -131,14 +172,7 @@ export function WorkspaceProvider({
   );
 
   const value = useMemo<WorkspaceContextValue>(() => {
-    const activate = (id: string) => {
-      setActiveVideoId(id);
-      setSelectedNodeId(id);
-      setIsPlaying(true);
-      setPlaybackCurrentSec(0);
-      setPlaybackDurationSec(0);
-      setSeekToSec(null);
-    };
+    const activate = activateVideo;
 
     const stepVideo = (delta: number) => {
       if (playlist.length === 0 || activeVideoId === null) {
@@ -185,6 +219,7 @@ export function WorkspaceProvider({
         }
         activate(next[0].id);
       },
+      addVideos,
       togglePlay: () => setIsPlaying((playing) => !playing),
       nextVideo: () => stepVideo(1),
       prevVideo: () => stepVideo(-1),
@@ -260,6 +295,8 @@ export function WorkspaceProvider({
     playbackRate,
     isFullscreen,
     setFullscreen,
+    activateVideo,
+    addVideos,
     sortKeys,
     sortDirection,
     isSidebarVisible,

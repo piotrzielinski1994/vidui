@@ -1,4 +1,5 @@
 mod focus;
+mod import;
 mod media;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -16,7 +17,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             media::prepare_media,
-            focus::focus_webview
+            focus::focus_webview,
+            import::expand_dropped_paths
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

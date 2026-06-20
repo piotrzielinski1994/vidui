@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { WorkspaceLayout } from "@/components/workspace/workspace-layout";
+import { DropOverlay } from "@/components/workspace/drop-overlay";
 import {
   CommandPalette,
   type PaletteCommand,
@@ -7,7 +8,9 @@ import {
 import { useWorkspace } from "@/components/workspace/workspace-context";
 import { videosFromPaths } from "@/components/workspace/videos-from-paths";
 import {
+  expandDroppedPaths,
   openVideoFiles,
+  watchFileDrop,
   watchFullscreen,
   watchWindowFocus,
 } from "@/lib/tauri";
@@ -20,6 +23,7 @@ import {
 export function Workspace() {
   const {
     loadVideos,
+    addVideos,
     togglePlay,
     nextVideo,
     prevVideo,
@@ -33,6 +37,7 @@ export function Workspace() {
     setFullscreen,
   } = useWorkspace();
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Drive isFullscreen from the REAL window state (every path: native F11, green
   // button, double-click) and re-arm the WKWebView first responder on each
@@ -45,6 +50,27 @@ export function Workspace() {
       void focusPromise.then((unlisten) => unlisten());
     };
   }, [setFullscreen]);
+
+  // Drop files/folders onto the window -> expand (recurse folders + filter) in
+  // Rust, then APPEND. The overlay tracks the live drag state.
+  useEffect(() => {
+    const dropPromise = watchFileDrop(async (event) => {
+      if (event.type === "enter") {
+        setIsDragging(true);
+        return;
+      }
+      if (event.type === "leave") {
+        setIsDragging(false);
+        return;
+      }
+      setIsDragging(false);
+      const paths = await expandDroppedPaths(event.paths);
+      addVideos(videosFromPaths(paths));
+    });
+    return () => {
+      void dropPromise.then((unlisten) => unlisten());
+    };
+  }, [addVideos]);
 
   const openFiles = async () => {
     const paths = await openVideoFiles();
@@ -91,13 +117,14 @@ export function Workspace() {
     .filter((command): command is PaletteCommand => command !== null);
 
   return (
-    <>
+    <div className="relative h-full w-full">
       <WorkspaceLayout />
+      {isDragging && <DropOverlay />}
       <CommandPalette
         open={isPaletteOpen}
         onOpenChange={setIsPaletteOpen}
         commands={commands}
       />
-    </>
+    </div>
   );
 }

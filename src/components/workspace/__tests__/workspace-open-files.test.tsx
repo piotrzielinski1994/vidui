@@ -17,6 +17,8 @@ vi.mock("@/lib/tauri", () => ({
   watchFullscreen: vi.fn(() => Promise.resolve(() => {})),
   watchWindowFocus: vi.fn(() => Promise.resolve(() => {})),
   focusWebview: vi.fn(() => Promise.resolve()),
+  expandDroppedPaths: vi.fn(() => Promise.resolve([])),
+  watchFileDrop: vi.fn(() => Promise.resolve(() => {})),
 }));
 
 const renderWorkspace = () =>

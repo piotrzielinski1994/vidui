@@ -51,7 +51,11 @@ Rust backend tests: `cd src-tauri && cargo test`.
 > a seekable progress bar across the bar's top edge - click or drag to scrub). It boots with an empty playlist:
 > `Open files` (`Mod+O`, or the command palette) opens the native picker (filtered to
 > `mp4/mkv/mov/webm/avi`) and **replaces** the playlist with the chosen files, auto-playing the
-> first. The viewport renders a real `<video>`; play/pause, prev/next, and clicking a row all
+> first. **Drag & drop:** dropping video files (or folders, recursed) from Finder/Explorer onto
+> the window **appends** them to the playlist - a Rust `expand_dropped_paths` command walks the
+> dropped paths, recurses folders, keeps only known video extensions, dedupes and sorts; a
+> full-window overlay shows while a drag hovers. Dropping onto an empty list activates+plays the
+> first imported video (drop never disturbs an already-playing video). The viewport renders a real `<video>`; play/pause, prev/next, and clicking a row all
 > drive playback. Spacebar toggles play/pause. **Universal playback:** every opened file is probed
 > by a Rust `prepare_media` command (ffprobe); H.264/AAC plays directly, anything the webview can't
 > decode (WebM/VP9/MKV/AVI/AV1/Opus) is transcoded on the fly by ffmpeg to a streaming fragmented
@@ -85,12 +89,12 @@ src/
   app/providers.tsx     QueryClientProvider + HotkeysProvider
   routes/               __root (layout + 404), index (player workspace), settings
   components/
-    workspace/          player shell: context, flat video-list, sort-natural, viewport (real video), transport bar, videos-from-paths, command palette
+    workspace/          player shell: context, flat video-list, sort-natural, viewport (real video), transport bar, videos-from-paths, command palette, drop-overlay (drag-drop import)
     ui/                 shadcn primitives (button, badge, scroll-area, resizable, command, dialog)
   lib/                  tauri.ts (typed invoke wrappers), utils.ts (cn), shortcuts/ (action registry + global hotkeys)
   index.css             Tailwind v4 + theme tokens
   test/setup.ts         Vitest + Testing Library setup
-src-tauri/              Rust desktop shell: greet, media.rs (ffprobe/ffmpeg prepare_media via bundled sidecars), focus.rs (WKWebView first-responder fix), binaries/ (gitignored ffmpeg sidecars), tauri.conf.json
+src-tauri/              Rust desktop shell: greet, media.rs (ffprobe/ffmpeg prepare_media via bundled sidecars), import.rs (expand_dropped_paths - folder-walk + ext filter for drag-drop), focus.rs (WKWebView first-responder fix), binaries/ (gitignored ffmpeg sidecars), tauri.conf.json
 scripts/                fetch-ffmpeg.sh (download bundled ffmpeg/ffprobe sidecars)
 tests/e2e/              Behavior smoke tests
 docs/                   spec/plan per feature, ADR, learnings

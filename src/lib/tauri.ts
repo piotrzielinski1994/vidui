@@ -1,4 +1,5 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 
@@ -70,6 +71,42 @@ export function watchWindowFocus(): Promise<() => void> {
     return getCurrentWindow().onFocusChanged(({ payload: focused }) => {
       if (focused) {
         void focusWebview();
+      }
+    });
+  } catch {
+    return Promise.resolve(NO_UNLISTEN);
+  }
+}
+
+// Expand dropped paths: the Rust side walks each path (recursing folders), keeps
+// only video-extension files, dedupes, and sorts. Returns a flat path list.
+export function expandDroppedPaths(paths: string[]): Promise<string[]> {
+  return invoke<string[]>("expand_dropped_paths", { paths });
+}
+
+export type FileDropEvent =
+  | { type: "enter"; paths: string[] }
+  | { type: "leave" }
+  | { type: "drop"; paths: string[] };
+
+// Subscribe to the webview drag-drop event, flattened to a FileDropEvent (the
+// `over` phase is ignored). No-op (NO_UNLISTEN) outside a Tauri host, so plain
+// browser dev and jsdom tests don't crash - same guard as watchFullscreen.
+export function watchFileDrop(
+  handler: (event: FileDropEvent) => void,
+): Promise<() => void> {
+  try {
+    return getCurrentWebview().onDragDropEvent(({ payload }) => {
+      if (payload.type === "enter") {
+        handler({ type: "enter", paths: payload.paths });
+        return;
+      }
+      if (payload.type === "leave") {
+        handler({ type: "leave" });
+        return;
+      }
+      if (payload.type === "drop") {
+        handler({ type: "drop", paths: payload.paths });
       }
     });
   } catch {
