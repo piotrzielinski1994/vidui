@@ -13,7 +13,7 @@ const playAction: ShortcutAction = {
   id: "toggle-play",
   name: "Play / pause",
   description: "Toggle playback",
-  defaultHotkey: "Mod+P",
+  defaultHotkey: "Space",
 };
 
 const nextAction: ShortcutAction = {
@@ -47,7 +47,7 @@ describe("CommandPalette", () => {
 
     const playRow = screen.getByRole("option", { name: /play \/ pause/i });
     expect(
-      within(playRow).getByText(formatForDisplay("Mod+P")),
+      within(playRow).getByText(formatForDisplay("Space")),
     ).toBeInTheDocument();
 
     const nextRow = screen.getByRole("option", { name: /next video/i });

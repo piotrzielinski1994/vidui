@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -6,6 +6,12 @@ import { WorkspaceProvider } from "@/components/workspace/workspace-context";
 import { VideoList } from "@/components/workspace/video-list";
 import { Viewport } from "@/components/workspace/viewport";
 import { fixtureVideos } from "./fixtures";
+
+// Viewport pulls in the Tauri IPC boundary; mock the seam, not the components.
+vi.mock("@/lib/tauri", () => ({
+  prepareMediaUrl: (path: string) => Promise.resolve(`asset://localhost${path}`),
+  openVideoFiles: vi.fn(() => Promise.resolve([])),
+}));
 
 const renderList = (initialActiveVideoId?: string) =>
   render(

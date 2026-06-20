@@ -12,6 +12,12 @@ import {
   compositeFixture,
   compositeTypeTitleAscNames,
 } from "./fixtures";
+import type { VideoNode } from "@/components/workspace/mock-data";
+
+const loadFixture: VideoNode[] = [
+  { id: "l-1", name: "L1", format: "MP4", path: "/load/l1.mp4" },
+  { id: "l-2", name: "L2", format: "MKV", path: "/load/l2.mkv" },
+];
 
 // Thin probe that surfaces the context state as observable DOM, mirroring the
 // requi render-under-provider convention (no SUT mocking). Sort is now a
@@ -29,6 +35,8 @@ function Probe() {
       <output aria-label="active-id">{ws.activeVideoId ?? "none"}</output>
       <output aria-label="selected-id">{ws.selectedNodeId ?? "none"}</output>
       <output aria-label="playing">{String(ws.isPlaying)}</output>
+      <output aria-label="current">{String(ws.playbackCurrentSec)}</output>
+      <output aria-label="duration">{String(ws.playbackDurationSec)}</output>
       <output aria-label="direction">{ws.sortDirection}</output>
       <output aria-label="keys">{ws.sortKeys.join(",") || "none"}</output>
       <output aria-label="sidebar-visible">
@@ -46,6 +54,9 @@ function Probe() {
       <button onClick={() => ws.prevVideo()}>do-prev</button>
       <button onClick={() => ws.togglePlay()}>do-play</button>
       <button onClick={() => ws.selectNode("v-9")}>select-9</button>
+      <button onClick={() => ws.loadVideos(loadFixture)}>do-load</button>
+      <button onClick={() => ws.reportProgress(30, 60)}>do-progress</button>
+      <button onClick={() => ws.reportEnded()}>do-ended</button>
     </div>
   );
 }
@@ -173,6 +184,18 @@ describe("workspace context", () => {
     expect(screen.getByLabelText("active")).toHaveTextContent("9 - Interlude");
   });
 
+  // behavior: selectNode auto-plays the newly active video (AC-009 / spec §1)
+  it("should set isPlaying true if a node is selected", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: fixtureVideos });
+
+    expect(screen.getByLabelText("playing")).toHaveTextContent("false");
+
+    await user.click(screen.getByRole("button", { name: "select-9" }));
+
+    expect(screen.getByLabelText("playing")).toHaveTextContent("true");
+  });
+
   // behavior: nextVideo steps active forward through current order (open order here)
   it("should advance the active video to the next entry in current order if nextVideo is called", async () => {
     const user = userEvent.setup();
@@ -182,6 +205,28 @@ describe("workspace context", () => {
 
     // open order is 1, 21, ... so next from "1" is "21"
     expect(screen.getByLabelText("active")).toHaveTextContent("21 - Finale");
+  });
+
+  // behavior: nextVideo auto-plays the newly active video (AC-008 / spec §1)
+  it("should set isPlaying true if nextVideo is called", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: fixtureVideos, initialActiveVideoId: "v-1" });
+
+    expect(screen.getByLabelText("playing")).toHaveTextContent("false");
+
+    await user.click(screen.getByRole("button", { name: "do-next" }));
+
+    expect(screen.getByLabelText("playing")).toHaveTextContent("true");
+  });
+
+  // behavior: prevVideo auto-plays the newly active video (AC-008 / spec §1)
+  it("should set isPlaying true if prevVideo is called", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: fixtureVideos, initialActiveVideoId: "v-1" });
+
+    await user.click(screen.getByRole("button", { name: "do-prev" }));
+
+    expect(screen.getByLabelText("playing")).toHaveTextContent("true");
   });
 
   // behavior: nextVideo wraps last -> first in current order (E-3)
@@ -329,5 +374,86 @@ describe("workspace context", () => {
 
     await user.click(screen.getByRole("button", { name: "do-prev" }));
     expect(screen.getByLabelText("active-id")).toHaveTextContent("solo");
+  });
+
+  // behavior: provider defaults to an empty playlist if no videos prop is given (spec §1: boots empty)
+  it("should expose an empty playlist if no videos prop is supplied", () => {
+    renderProbe({});
+
+    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+    expect(screen.getByLabelText("active")).toHaveTextContent("none");
+  });
+
+  // behavior: playback figures start at 0 before any report (data model §5: 0 until first report)
+  it("should expose playbackCurrentSec and playbackDurationSec of 0 if just mounted", () => {
+    renderProbe({ videos: fixtureVideos, initialActiveVideoId: "v-1" });
+
+    expect(screen.getByLabelText("current")).toHaveTextContent("0");
+    expect(screen.getByLabelText("duration")).toHaveTextContent("0");
+  });
+
+  // side-effect-contract: reportProgress pushes the live current/duration into state (AC-006)
+  it("should store the reported current and duration if reportProgress is called", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: fixtureVideos, initialActiveVideoId: "v-1" });
+
+    await user.click(screen.getByRole("button", { name: "do-progress" }));
+
+    expect(screen.getByLabelText("current")).toHaveTextContent("30");
+    expect(screen.getByLabelText("duration")).toHaveTextContent("60");
+  });
+
+  // side-effect-contract: reportEnded stops playback with no auto-advance (E-6 / AC-008-exclusion)
+  it("should set isPlaying false and keep the active video if reportEnded is called", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: fixtureVideos, initialActiveVideoId: "v-1" });
+
+    await user.click(screen.getByRole("button", { name: "do-play" }));
+    expect(screen.getByLabelText("playing")).toHaveTextContent("true");
+
+    await user.click(screen.getByRole("button", { name: "do-ended" }));
+
+    expect(screen.getByLabelText("playing")).toHaveTextContent("false");
+    expect(screen.getByLabelText("active-id")).toHaveTextContent("v-1");
+  });
+
+  // side-effect-contract: loadVideos replaces the playlist, activates + plays the first (AC-002)
+  it("should replace the playlist and activate-and-play the first if loadVideos is called", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: fixtureVideos });
+
+    await user.click(screen.getByRole("button", { name: "do-load" }));
+
+    expect(playlistNames()).toEqual(["L1", "L2"]);
+    expect(screen.getByLabelText("active-id")).toHaveTextContent("l-1");
+    expect(screen.getByLabelText("playing")).toHaveTextContent("true");
+  });
+
+  // behavior: switching the active video via loadVideos resets the live playback figures to 0 (data model §5)
+  it("should reset playback current and duration to 0 if loadVideos switches the active video", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: fixtureVideos, initialActiveVideoId: "v-1" });
+
+    await user.click(screen.getByRole("button", { name: "do-progress" }));
+    expect(screen.getByLabelText("current")).toHaveTextContent("30");
+
+    await user.click(screen.getByRole("button", { name: "do-load" }));
+
+    expect(screen.getByLabelText("current")).toHaveTextContent("0");
+    expect(screen.getByLabelText("duration")).toHaveTextContent("0");
+  });
+
+  // behavior: switching the active video via selectNode resets the live playback figures to 0 (data model §5)
+  it("should reset playback figures to 0 if selectNode switches the active video", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: fixtureVideos, initialActiveVideoId: "v-1" });
+
+    await user.click(screen.getByRole("button", { name: "do-progress" }));
+    expect(screen.getByLabelText("current")).toHaveTextContent("30");
+
+    await user.click(screen.getByRole("button", { name: "select-9" }));
+
+    expect(screen.getByLabelText("current")).toHaveTextContent("0");
+    expect(screen.getByLabelText("duration")).toHaveTextContent("0");
   });
 });

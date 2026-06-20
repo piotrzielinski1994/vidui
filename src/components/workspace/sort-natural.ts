@@ -1,6 +1,6 @@
 import type { VideoNode } from "@/components/workspace/mock-data";
 
-export type SortField = "title" | "type" | "duration" | "resolution";
+export type SortField = "title" | "type";
 
 function numericPrefix(name: string): number | null {
   const match = name.match(/^\s*(\d+)/);
@@ -22,8 +22,6 @@ const FIELD_COMPARATORS: Record<
 > = {
   title: compareTitle,
   type: (a, b) => a.format.localeCompare(b.format),
-  duration: (a, b) => a.durationSec - b.durationSec,
-  resolution: (a, b) => a.resolution.localeCompare(b.resolution),
 };
 
 export function sortVideos(

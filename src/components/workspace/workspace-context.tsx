@@ -1,11 +1,14 @@
 import {
   createContext,
+  useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
-import { mockVideos, type VideoNode } from "@/components/workspace/mock-data";
+import { type VideoNode } from "@/components/workspace/mock-data";
 import { sortVideos, type SortField } from "@/components/workspace/sort-natural";
 
 type SortDirection = "asc" | "desc";
@@ -16,14 +19,23 @@ type WorkspaceContextValue = {
   activeVideoId: string | null;
   activeVideo: VideoNode | null;
   isPlaying: boolean;
+  playbackCurrentSec: number;
+  playbackDurationSec: number;
+  seekToSec: number | null;
+  isFullscreen: boolean;
   sortKeys: SortField[];
   sortDirection: SortDirection;
   isSidebarVisible: boolean;
   isTransportVisible: boolean;
   selectNode: (id: string) => void;
+  loadVideos: (videos: VideoNode[]) => void;
   togglePlay: () => void;
   nextVideo: () => void;
   prevVideo: () => void;
+  seek: (sec: number) => void;
+  reportProgress: (currentSec: number, durationSec: number) => void;
+  reportEnded: () => void;
+  setFullscreen: (value: boolean) => void;
   toggleSortKey: (field: SortField) => void;
   toggleSortDirection: () => void;
   toggleSidebar: () => void;
@@ -42,11 +54,12 @@ type WorkspaceProviderProps = {
 
 export function WorkspaceProvider({
   children,
-  videos = mockVideos,
+  videos = [],
   initialActiveVideoId,
   initialSortKeys = [],
   initialSortDirection = "asc",
 }: WorkspaceProviderProps) {
+  const [sourceVideos, setSourceVideos] = useState<VideoNode[]>(videos);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(
     initialActiveVideoId ?? null,
   );
@@ -54,18 +67,64 @@ export function WorkspaceProvider({
     initialActiveVideoId ?? null,
   );
   const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackCurrentSec, setPlaybackCurrentSec] = useState(0);
+  const [playbackDurationSec, setPlaybackDurationSec] = useState(0);
+  const [seekToSec, setSeekToSec] = useState<number | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [sortKeys, setSortKeys] = useState<SortField[]>(initialSortKeys);
   const [sortDirection, setSortDirection] =
     useState<SortDirection>(initialSortDirection);
   const [isSidebarVisible, setIsSidebarVisible] = useState(true);
   const [isTransportVisible, setIsTransportVisible] = useState(true);
+  const wasFullscreen = useRef(false);
+  const chromeRef = useRef({ sidebar: true, transport: true });
+  const preFullscreenChrome = useRef({ sidebar: true, transport: true });
+
+  // Mirror the live visibility into a ref so setFullscreen (stable, []-deps) can
+  // read the CURRENT windowed values without going stale.
+  useEffect(() => {
+    chromeRef.current = {
+      sidebar: isSidebarVisible,
+      transport: isTransportVisible,
+    };
+  }, [isSidebarVisible, isTransportVisible]);
+
+  // Stable identity (the Workspace subscribes with this in a dep array, so it
+  // must not change every render). On a real fullscreen TRANSITION it hides
+  // chrome on enter (saving the windowed visibility first) and restores that
+  // saved state on exit - so a sidebar hidden before going fullscreen stays
+  // hidden after. Between transitions the panel toggles work freely.
+  const setFullscreen = useCallback((value: boolean) => {
+    setIsFullscreen(value);
+    if (wasFullscreen.current === value) {
+      return;
+    }
+    wasFullscreen.current = value;
+    if (value) {
+      preFullscreenChrome.current = chromeRef.current;
+      setIsSidebarVisible(false);
+      setIsTransportVisible(false);
+      return;
+    }
+    setIsSidebarVisible(preFullscreenChrome.current.sidebar);
+    setIsTransportVisible(preFullscreenChrome.current.transport);
+  }, []);
 
   const playlist = useMemo(
-    () => sortVideos(videos, sortKeys, sortDirection),
-    [videos, sortKeys, sortDirection],
+    () => sortVideos(sourceVideos, sortKeys, sortDirection),
+    [sourceVideos, sortKeys, sortDirection],
   );
 
   const value = useMemo<WorkspaceContextValue>(() => {
+    const activate = (id: string) => {
+      setActiveVideoId(id);
+      setSelectedNodeId(id);
+      setIsPlaying(true);
+      setPlaybackCurrentSec(0);
+      setPlaybackDurationSec(0);
+      setSeekToSec(null);
+    };
+
     const stepVideo = (delta: number) => {
       if (playlist.length === 0 || activeVideoId === null) {
         return;
@@ -75,8 +134,7 @@ export function WorkspaceProvider({
         return;
       }
       const next = playlist[(index + delta + playlist.length) % playlist.length];
-      setActiveVideoId(next.id);
-      setSelectedNodeId(next.id);
+      activate(next.id);
     };
 
     return {
@@ -88,17 +146,41 @@ export function WorkspaceProvider({
           ? (playlist.find((video) => video.id === activeVideoId) ?? null)
           : null,
       isPlaying,
+      playbackCurrentSec,
+      playbackDurationSec,
+      seekToSec,
+      isFullscreen,
       sortKeys,
       sortDirection,
       isSidebarVisible,
       isTransportVisible,
-      selectNode: (id) => {
-        setSelectedNodeId(id);
-        setActiveVideoId(id);
+      selectNode: (id) => activate(id),
+      loadVideos: (next) => {
+        setSourceVideos(next);
+        if (next.length === 0) {
+          setActiveVideoId(null);
+          setSelectedNodeId(null);
+          setIsPlaying(false);
+          setPlaybackCurrentSec(0);
+          setPlaybackDurationSec(0);
+          return;
+        }
+        activate(next[0].id);
       },
       togglePlay: () => setIsPlaying((playing) => !playing),
       nextVideo: () => stepVideo(1),
       prevVideo: () => stepVideo(-1),
+      seek: (sec) => {
+        setPlaybackCurrentSec(sec);
+        setSeekToSec(sec);
+      },
+      reportProgress: (currentSec, durationSec) => {
+        setPlaybackCurrentSec(currentSec);
+        setPlaybackDurationSec(durationSec);
+        setSeekToSec(null);
+      },
+      reportEnded: () => setIsPlaying(false),
+      setFullscreen,
       toggleSortKey: (field) =>
         setSortKeys((current) =>
           current.includes(field)
@@ -115,6 +197,11 @@ export function WorkspaceProvider({
     selectedNodeId,
     activeVideoId,
     isPlaying,
+    playbackCurrentSec,
+    playbackDurationSec,
+    seekToSec,
+    isFullscreen,
+    setFullscreen,
     sortKeys,
     sortDirection,
     isSidebarVisible,
