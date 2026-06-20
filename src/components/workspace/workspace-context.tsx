@@ -10,8 +10,12 @@ import {
 } from "react";
 import { type VideoNode } from "@/components/workspace/mock-data";
 import { sortVideos, type SortField } from "@/components/workspace/sort-natural";
+import { clampRate } from "@/components/workspace/clamp-rate";
 
 type SortDirection = "asc" | "desc";
+
+const clampVolume = (value: number) =>
+  Math.round(Math.min(1, Math.max(0, value)) * 100) / 100;
 
 type WorkspaceContextValue = {
   playlist: VideoNode[];
@@ -22,6 +26,9 @@ type WorkspaceContextValue = {
   playbackCurrentSec: number;
   playbackDurationSec: number;
   seekToSec: number | null;
+  volume: number;
+  isMuted: boolean;
+  playbackRate: number;
   isFullscreen: boolean;
   sortKeys: SortField[];
   sortDirection: SortDirection;
@@ -33,6 +40,11 @@ type WorkspaceContextValue = {
   nextVideo: () => void;
   prevVideo: () => void;
   seek: (sec: number) => void;
+  seekBy: (delta: number) => void;
+  setVolume: (value: number) => void;
+  changeVolume: (delta: number) => void;
+  toggleMute: () => void;
+  changeRate: (delta: number) => void;
   reportProgress: (currentSec: number, durationSec: number) => void;
   reportEnded: () => void;
   setFullscreen: (value: boolean) => void;
@@ -70,6 +82,9 @@ export function WorkspaceProvider({
   const [playbackCurrentSec, setPlaybackCurrentSec] = useState(0);
   const [playbackDurationSec, setPlaybackDurationSec] = useState(0);
   const [seekToSec, setSeekToSec] = useState<number | null>(null);
+  const [volume, setVolumeState] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [sortKeys, setSortKeys] = useState<SortField[]>(initialSortKeys);
   const [sortDirection, setSortDirection] =
@@ -149,6 +164,9 @@ export function WorkspaceProvider({
       playbackCurrentSec,
       playbackDurationSec,
       seekToSec,
+      volume,
+      isMuted,
+      playbackRate,
       isFullscreen,
       sortKeys,
       sortDirection,
@@ -173,6 +191,43 @@ export function WorkspaceProvider({
       seek: (sec) => {
         setPlaybackCurrentSec(sec);
         setSeekToSec(sec);
+      },
+      seekBy: (delta) => {
+        if (activeVideoId === null) {
+          return;
+        }
+        const target = playbackCurrentSec + delta;
+        const lowerClamped = Math.max(0, target);
+        const clamped =
+          playbackDurationSec > 0
+            ? Math.min(playbackDurationSec, lowerClamped)
+            : lowerClamped;
+        setPlaybackCurrentSec(clamped);
+        setSeekToSec(clamped);
+      },
+      setVolume: (next) => {
+        if (activeVideoId === null) {
+          return;
+        }
+        setVolumeState(clampVolume(next));
+      },
+      changeVolume: (delta) => {
+        if (activeVideoId === null) {
+          return;
+        }
+        setVolumeState((current) => clampVolume(current + delta));
+      },
+      toggleMute: () => {
+        if (activeVideoId === null) {
+          return;
+        }
+        setIsMuted((muted) => !muted);
+      },
+      changeRate: (delta) => {
+        if (activeVideoId === null) {
+          return;
+        }
+        setPlaybackRate((current) => clampRate(current + delta));
       },
       reportProgress: (currentSec, durationSec) => {
         setPlaybackCurrentSec(currentSec);
@@ -200,6 +255,9 @@ export function WorkspaceProvider({
     playbackCurrentSec,
     playbackDurationSec,
     seekToSec,
+    volume,
+    isMuted,
+    playbackRate,
     isFullscreen,
     setFullscreen,
     sortKeys,

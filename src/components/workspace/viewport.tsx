@@ -16,12 +16,27 @@ export function Viewport() {
     activeVideo,
     isPlaying,
     seekToSec,
+    volume,
+    isMuted,
+    playbackRate,
     isFullscreen,
+    togglePlay,
     reportProgress,
     reportEnded,
   } = useWorkspace();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [source, setSource] = useState<SourceState | null>(null);
+
+  // A single click toggles play/pause instantly (no debounce, so it feels as
+  // snappy as the transport button). A double click goes fullscreen: the DOM
+  // fires `click` twice before `dblclick`, so the two toggles cancel out (net
+  // no change) and fullscreen lands on top - no stray toggle, no delay.
+  const handleClick = () => {
+    if (!activeVideo) {
+      return;
+    }
+    togglePlay();
+  };
 
   // Resolve the playable source for the active file. The Rust side probes it and
   // transcodes unsupported codecs (AV1/VP9/Opus/...) to H.264/AAC, which can take
@@ -73,10 +88,21 @@ export function Viewport() {
     element.currentTime = seekToSec;
   }, [seekToSec]);
 
+  useEffect(() => {
+    const element = videoRef.current;
+    if (!element) {
+      return;
+    }
+    element.volume = volume;
+    element.muted = isMuted;
+    element.playbackRate = playbackRate;
+  }, [volume, isMuted, playbackRate, sourceForActive]);
+
   return (
     <div
       role="region"
       aria-label="Video viewport"
+      onClick={handleClick}
       onDoubleClick={() => void toggleFullscreen()}
       className="relative flex h-full w-full items-center justify-center bg-black"
     >

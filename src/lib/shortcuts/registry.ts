@@ -4,6 +4,15 @@ export type ShortcutActionId =
   | "toggle-play"
   | "next-video"
   | "prev-video"
+  | "seek-forward"
+  | "seek-back"
+  | "seek-forward-fine"
+  | "seek-back-fine"
+  | "volume-up"
+  | "volume-down"
+  | "toggle-mute"
+  | "speed-up"
+  | "speed-down"
   | "toggle-sort-direction"
   | "toggle-sidebar"
   | "toggle-transport";
@@ -45,6 +54,60 @@ export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = [
     name: "Previous video",
     description: "Activate the previous video in the current order.",
     defaultHotkey: "Mod+Left",
+  },
+  {
+    id: "seek-forward",
+    name: "Seek forward 5s",
+    description: "Jump the active video forward by 5 seconds.",
+    defaultHotkey: "ArrowRight",
+  },
+  {
+    id: "seek-back",
+    name: "Seek back 5s",
+    description: "Jump the active video back by 5 seconds.",
+    defaultHotkey: "ArrowLeft",
+  },
+  {
+    id: "seek-forward-fine",
+    name: "Seek forward 1s",
+    description: "Jump the active video forward by 1 second.",
+    defaultHotkey: "Shift+ArrowRight",
+  },
+  {
+    id: "seek-back-fine",
+    name: "Seek back 1s",
+    description: "Jump the active video back by 1 second.",
+    defaultHotkey: "Shift+ArrowLeft",
+  },
+  {
+    id: "volume-up",
+    name: "Volume up",
+    description: "Raise playback volume by 5%.",
+    defaultHotkey: "ArrowUp",
+  },
+  {
+    id: "volume-down",
+    name: "Volume down",
+    description: "Lower playback volume by 5%.",
+    defaultHotkey: "ArrowDown",
+  },
+  {
+    id: "toggle-mute",
+    name: "Mute / unmute",
+    description: "Toggle mute on the active video.",
+    defaultHotkey: "M",
+  },
+  {
+    id: "speed-up",
+    name: "Speed up",
+    description: "Increase playback speed by 0.1x (up to 2x).",
+    defaultHotkey: "]",
+  },
+  {
+    id: "speed-down",
+    name: "Speed down",
+    description: "Decrease playback speed by 0.1x (down to 0.5x).",
+    defaultHotkey: "[",
   },
   {
     id: "toggle-sort-direction",

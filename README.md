@@ -49,7 +49,8 @@ Rust backend tests: `cd src-tauri && cargo test`.
 > drive playback. Spacebar toggles play/pause. **Universal playback:** every opened file is probed
 > by a Rust `prepare_media` command (ffprobe); H.264/AAC plays directly, anything the webview can't
 > decode (WebM/VP9/MKV/AVI/AV1/Opus) is transcoded on the fly by ffmpeg to a streaming fragmented
-> MP4 that starts playing in under a second. Double-clicking the viewport (or the green button /
+> MP4 that starts playing in under a second. Single-clicking the viewport toggles
+> play/pause; double-clicking it (or the green button /
 > F11) enters fullscreen, which hides the chrome (sidebar, transport, overlay) and restores the
 > pre-fullscreen visibility on exit. Requires `ffmpeg` on PATH for now (a bundled binary for true
 > standalone is still TODO - see [docs/features/20260620004905-real-playback](docs/features/20260620004905-real-playback/)).
@@ -58,10 +59,14 @@ Rust backend tests: `cd src-tauri && cargo test`.
 > active video, play/pause, live current/duration, sort direction, fullscreen) is shared via a
 > `WorkspaceProvider` context (no prop drilling). The `/settings` route still exists (no in-UI link
 > yet); the `greet` Tauri command stays wired as the IPC proof for later use. A `Mod+K` command
-> palette (cmdk) lists the workspace actions (open files, play/pause, next, prev, toggle sort,
-> toggle sidebar, toggle transport bar); each action also has its own global hotkey. Bindings are
-> fixed defaults - no user remapping or persistence yet (playlist + panel visibility reset on reload).
-> Not yet: volume/speed/subtitles, auto-advance on end, playlist persistence, bundled ffmpeg.
+> palette (cmdk) lists the workspace actions (open files, play/pause, next, prev, relative seek,
+> volume up/down, mute, speed up/down, toggle sort, toggle sidebar, toggle transport bar); each
+> action also has its own global hotkey. **Extended transport:** arrows seek the active video
+> (Left/Right ±5s, Shift+Left/Right ±1s), Up/Down adjust volume (±5%) and `M` mutes (mute button +
+> volume slider in the transport bar), `[`/`]` step playback speed by 0.1x within 0.5x-2x (a rate
+> readout shows in the bar only when off 1x). Bindings are fixed defaults - no user remapping or
+> persistence yet (playlist + panel visibility reset on reload).
+> Not yet: subtitles, auto-advance on end, playlist persistence, bundled ffmpeg.
 
 ## Repo layout
 

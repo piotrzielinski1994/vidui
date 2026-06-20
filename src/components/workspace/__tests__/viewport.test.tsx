@@ -32,6 +32,11 @@ function SelectButton({ id }: { id: string }) {
   return <button onClick={() => selectNode(id)}>select-{id}</button>;
 }
 
+function PlayingProbe() {
+  const { isPlaying } = useWorkspace();
+  return <output aria-label="playing">{String(isPlaying)}</output>;
+}
+
 const region = () => screen.getByRole("region", { name: /video viewport/i });
 const findVideo = async () => {
   await waitFor(() =>
@@ -181,6 +186,55 @@ describe("Viewport", () => {
     await user.dblClick(region());
 
     expect(toggleFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  // side-effect-contract: a single click on the viewport toggles play/pause
+  it("should toggle play to pause if the viewport is single-clicked", async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkspaceProvider videos={fixtureVideos} initialActiveVideoId="v-3">
+        <Viewport />
+        <PlayingProbe />
+      </WorkspaceProvider>,
+    );
+
+    expect(screen.getByLabelText("playing")).toHaveTextContent("false");
+
+    await user.click(region());
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("playing")).toHaveTextContent("true"),
+    );
+  });
+
+  // side-effect-contract: a double-click must NOT leave a stray single-click toggle behind
+  it("should not toggle play if the viewport is double-clicked", async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkspaceProvider videos={fixtureVideos} initialActiveVideoId="v-3">
+        <Viewport />
+        <PlayingProbe />
+      </WorkspaceProvider>,
+    );
+
+    await user.dblClick(region());
+
+    expect(screen.getByLabelText("playing")).toHaveTextContent("false");
+  });
+
+  // behavior: a single click with no active video is a safe no-op
+  it("should not throw and stay paused if the viewport is single-clicked with no active video", async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkspaceProvider videos={fixtureVideos}>
+        <Viewport />
+        <PlayingProbe />
+      </WorkspaceProvider>,
+    );
+
+    await user.click(region());
+
+    expect(screen.getByLabelText("playing")).toHaveTextContent("false");
   });
 
   // behavior: empty state placeholder + no <video> when nothing is active (Empty)
