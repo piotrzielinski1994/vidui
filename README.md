@@ -21,7 +21,13 @@ a build error from Cargo.
 ```bash
 nvm use
 npm install
+scripts/fetch-ffmpeg.sh   # download the bundled ffmpeg/ffprobe sidecars (required before any build)
 ```
+
+`scripts/fetch-ffmpeg.sh` downloads statically-linked `ffmpeg`+`ffprobe` for all
+supported targets into `src-tauri/binaries/` (gitignored, SHA-256 pinned). `cargo`
+fails to build without the binary for your host triple present. macOS binaries are
+GPLv3, Windows is LGPLv3 - see [docs/adr.md](docs/adr.md).
 
 ## Commands
 
@@ -52,8 +58,9 @@ Rust backend tests: `cd src-tauri && cargo test`.
 > MP4 that starts playing in under a second. Single-clicking the viewport toggles
 > play/pause; double-clicking it (or the green button /
 > F11) enters fullscreen, which hides the chrome (sidebar, transport, overlay) and restores the
-> pre-fullscreen visibility on exit. Requires `ffmpeg` on PATH for now (a bundled binary for true
-> standalone is still TODO - see [docs/features/20260620004905-real-playback](docs/features/20260620004905-real-playback/)).
+> pre-fullscreen visibility on exit. **ffmpeg/ffprobe are bundled** as Tauri sidecars
+> (fetched by `scripts/fetch-ffmpeg.sh`) - the app is standalone, no system PATH install needed
+> (see [docs/features/20260620173011-bundle-ffmpeg-sidecar](docs/features/20260620173011-bundle-ffmpeg-sidecar/)).
 > The sort control toggles ascending/descending with natural numeric ordering (a
 > numeric filename prefix sorts by value, so `3` precedes `21`). All UI + playback state (selection,
 > active video, play/pause, live current/duration, sort direction, fullscreen) is shared via a
@@ -66,7 +73,7 @@ Rust backend tests: `cd src-tauri && cargo test`.
 > volume slider in the transport bar), `[`/`]` step playback speed by 0.1x within 0.5x-2x (a rate
 > readout shows in the bar only when off 1x). Bindings are fixed defaults - no user remapping or
 > persistence yet (playlist + panel visibility reset on reload).
-> Not yet: subtitles, auto-advance on end, playlist persistence, bundled ffmpeg.
+> Not yet: subtitles, auto-advance on end, playlist persistence.
 
 ## Repo layout
 
@@ -83,7 +90,8 @@ src/
   lib/                  tauri.ts (typed invoke wrappers), utils.ts (cn), shortcuts/ (action registry + global hotkeys)
   index.css             Tailwind v4 + theme tokens
   test/setup.ts         Vitest + Testing Library setup
-src-tauri/              Rust desktop shell: greet, media.rs (ffprobe/ffmpeg prepare_media), focus.rs (WKWebView first-responder fix), tauri.conf.json
+src-tauri/              Rust desktop shell: greet, media.rs (ffprobe/ffmpeg prepare_media via bundled sidecars), focus.rs (WKWebView first-responder fix), binaries/ (gitignored ffmpeg sidecars), tauri.conf.json
+scripts/                fetch-ffmpeg.sh (download bundled ffmpeg/ffprobe sidecars)
 tests/e2e/              Behavior smoke tests
 docs/                   spec/plan per feature, ADR, learnings
 ```

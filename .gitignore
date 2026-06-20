@@ -26,3 +26,6 @@ dist-ssr
 # Private working notes
 .pzielinski/
 CLAUDE.local.md
+
+# Bundled ffmpeg sidecars (fetched via scripts/fetch-ffmpeg.sh, not committed)
+src-tauri/binaries/

@@ -1,10 +1,14 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
+use tauri::async_runtime;
+use tauri_plugin_shell::process::CommandEvent;
+use tauri_plugin_shell::ShellExt;
 
 #[derive(Serialize)]
 pub struct PreparedMedia {
@@ -20,13 +24,22 @@ const DIRECT_AUDIO: &[&str] = &["aac", "mp3", ""];
 const FIRST_BYTES_TIMEOUT: Duration = Duration::from_secs(20);
 const MIN_STREAM_BYTES: u64 = 256 * 1024;
 
-fn probe_stream(path: &str, stream: &str) -> String {
-    let output = Command::new("ffprobe")
+fn is_directly_playable(vcodec: &str, acodec: &str) -> bool {
+    DIRECT_VIDEO.contains(&vcodec) && DIRECT_AUDIO.contains(&acodec)
+}
+
+async fn probe_stream(app: &tauri::AppHandle, path: &str, stream: &str) -> String {
+    let command = match app.shell().sidecar("ffprobe") {
+        Ok(command) => command,
+        Err(_) => return String::new(),
+    };
+    let output = command
         .args([
             "-v", "error", "-select_streams", stream, "-show_entries",
             "stream=codec_name", "-of", "csv=p=0", path,
         ])
-        .output();
+        .output()
+        .await;
     match output {
         Ok(out) => String::from_utf8_lossy(&out.stdout).trim().to_string(),
         Err(_) => String::new(),
@@ -48,18 +61,19 @@ fn file_len(path: &Path) -> u64 {
 }
 
 #[tauri::command]
-pub async fn prepare_media(path: String) -> Result<PreparedMedia, String> {
-    let vcodec = probe_stream(&path, "v:0");
+pub async fn prepare_media(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<PreparedMedia, String> {
+    let vcodec = probe_stream(&app, &path, "v:0").await;
     if vcodec.is_empty() {
         return Err(format!(
-            "ffprobe found no video stream (or ffmpeg missing) for: {path}"
+            "ffprobe found no video stream (or bundled ffmpeg failed) for: {path}"
         ));
     }
-    let acodec = probe_stream(&path, "a:0");
+    let acodec = probe_stream(&app, &path, "a:0").await;
 
-    let is_directly_playable =
-        DIRECT_VIDEO.contains(&vcodec.as_str()) && DIRECT_AUDIO.contains(&acodec.as_str());
-    if is_directly_playable {
+    if is_directly_playable(&vcodec, &acodec) {
         return Ok(PreparedMedia { path, transcoded: false });
     }
 
@@ -83,8 +97,10 @@ pub async fn prepare_media(path: String) -> Result<PreparedMedia, String> {
     } else {
         &["-c:v", "libx264", "-preset", "veryfast", "-crf", "23"]
     };
-    let mut command = Command::new("ffmpeg");
-    command
+    let command = app
+        .shell()
+        .sidecar("ffmpeg")
+        .map_err(|e| format!("failed to resolve bundled ffmpeg: {e}"))?
         .args(["-y", "-v", "error", "-i", &path])
         .args(video_args)
         .args([
@@ -92,22 +108,42 @@ pub async fn prepare_media(path: String) -> Result<PreparedMedia, String> {
             "frag_keyframe+empty_moov+default_base_moof", &target_str,
         ]);
 
-    let mut child = command
+    let (mut rx, child) = command
         .spawn()
         .map_err(|e| format!("failed to start ffmpeg: {e}"))?;
+
+    // The shell plugin force-pipes stdout/stderr into a bounded channel; nobody
+    // draining it would stall ffmpeg once the pipe buffer fills. Drain it in a
+    // detached task that records termination so the loop below can react. The
+    // child is NOT killed when prepare_media returns (CommandChild has no Drop),
+    // so encoding races ahead while <video> streams the growing fragmented MP4.
+    let terminated = Arc::new(AtomicBool::new(false));
+    let succeeded = Arc::new(AtomicBool::new(false));
+    let terminated_drain = terminated.clone();
+    let succeeded_drain = succeeded.clone();
+    async_runtime::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            if let CommandEvent::Terminated(payload) = event {
+                succeeded_drain.store(payload.code == Some(0), Ordering::SeqCst);
+                terminated_drain.store(true, Ordering::SeqCst);
+            }
+        }
+    });
 
     // Wait only until enough bytes exist to start streaming (not full encode).
     let started = Instant::now();
     loop {
-        if let Ok(Some(status)) = child.try_wait() {
-            // ffmpeg exited; if it failed and produced nothing, report it.
-            if !status.success() && file_len(&target) <= MIN_STREAM_BYTES {
+        if file_len(&target) > MIN_STREAM_BYTES {
+            break;
+        }
+        if terminated.load(Ordering::SeqCst) {
+            // ffmpeg exited. Only an actual failure is an error; a clean exit
+            // whose output is below the stream threshold (a very short clip) is
+            // still a complete, playable file.
+            if !succeeded.load(Ordering::SeqCst) {
                 let _ = std::fs::remove_file(&target);
                 return Err(format!("ffmpeg transcode failed for: {path}"));
             }
-            break;
-        }
-        if file_len(&target) > MIN_STREAM_BYTES {
             break;
         }
         if started.elapsed() > FIRST_BYTES_TIMEOUT {
@@ -119,4 +155,62 @@ pub async fn prepare_media(path: String) -> Result<PreparedMedia, String> {
     }
 
     Ok(PreparedMedia { path: target_str, transcoded: true })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{cache_path, is_directly_playable};
+
+    #[test]
+    fn should_be_directly_playable_when_h264_with_aac() {
+        assert!(is_directly_playable("h264", "aac"));
+    }
+
+    #[test]
+    fn should_be_directly_playable_when_h264_with_mp3() {
+        assert!(is_directly_playable("h264", "mp3"));
+    }
+
+    #[test]
+    fn should_be_directly_playable_when_h264_with_no_audio() {
+        assert!(is_directly_playable("h264", ""));
+    }
+
+    #[test]
+    fn should_not_be_directly_playable_when_vp9_with_opus() {
+        assert!(!is_directly_playable("vp9", "opus"));
+    }
+
+    #[test]
+    fn should_not_be_directly_playable_when_av1_with_aac() {
+        assert!(!is_directly_playable("av1", "aac"));
+    }
+
+    #[test]
+    fn should_not_be_directly_playable_when_h264_with_ac3() {
+        assert!(!is_directly_playable("h264", "ac3"));
+    }
+
+    #[test]
+    fn should_not_be_directly_playable_when_no_codecs() {
+        assert!(!is_directly_playable("", ""));
+    }
+
+    #[test]
+    fn should_return_same_path_when_called_twice_with_same_source() {
+        let source = "/some/video/file.mkv";
+        assert_eq!(cache_path(source), cache_path(source));
+    }
+
+    #[test]
+    fn should_land_under_vidui_transcode_dir_when_building_cache_path() {
+        let path = cache_path("/some/video/file.mkv");
+        assert!(path.to_string_lossy().contains("vidui-transcode"));
+    }
+
+    #[test]
+    fn should_have_mp4_suffix_when_building_cache_path() {
+        let path = cache_path("/some/video/file.mkv");
+        assert_eq!(path.extension().and_then(|e| e.to_str()), Some("mp4"));
+    }
 }
