@@ -7,6 +7,11 @@ Briefing for Claude Code. Read [README.md](README.md) first - setup, commands, r
 - Keep replies short and to the point. No filler, no pleasantries, no recap of what the user just said.
 - Status updates fit in one or two sentences.
 
+## UI / design
+
+- Read [docs/design.md](docs/design.md) before any UI change - it's the visual contract, shared verbatim with the `requi` and `dbui` repos to keep all three consistent. Key rule: **no rounded corners anywhere** (`--radius` and every `--radius-*` pinned to `0rem` in `index.css`); don't raise them or add `rounded-full` / `rounded-xs` / `rounded-[..]` (token-based `rounded-{sm,md,lg}` resolve to 0 so are tolerated, but prefer stripping). Buttons in a thin bar (the transport bar) fill the bar's full height, square, divided by a 1px border - not floating chips with their own height/padding (see `transport-bar.tsx` `BAR_BUTTON`).
+- Keep design.md in sync with `requi`/`dbui` when the shared contract changes; vidui-only rules can be added but mark them as such.
+
 ## Learning from conversation
 
 If during a session you learn something project-specific that future-you would otherwise have to re-derive - a non-obvious convention the user prefers, a constraint that bit us, a gotcha worth recording - append it to [docs/learnings.md](docs/learnings.md). Examples: formatting rules the user repeated, gotchas that broke a hook/CI, naming conventions enforced via review.

@@ -1,11 +1,18 @@
 import { useRef, type PointerEvent as ReactPointerEvent } from "react";
-import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace/workspace-context";
 import { formatTime } from "@/components/workspace/format-time";
-import { seekSecondsFromPointer } from "@/components/workspace/seek-position";
+import {
+  fractionFromPointer,
+  seekSecondsFromPointer,
+} from "@/components/workspace/seek-position";
 
 const EMPTY_TIME = "--:-- / --:--";
+
+// Bar buttons fill the bar's full height, square, no rounding - read as 1px-
+// divided cells, not floating chips (docs/design.md Layout rule).
+const BAR_BUTTON = "h-full w-12 rounded-none";
 
 export function TransportBar() {
   const {
@@ -13,13 +20,20 @@ export function TransportBar() {
     isPlaying,
     playbackCurrentSec,
     playbackDurationSec,
+    volume,
+    isMuted,
+    playbackRate,
     togglePlay,
     nextVideo,
     prevVideo,
     seek,
+    setVolume,
+    toggleMute,
   } = useWorkspace();
   const seekBarRef = useRef<HTMLDivElement>(null);
   const isScrubbing = useRef(false);
+  const volumeBarRef = useRef<HTMLDivElement>(null);
+  const isVolumeScrubbing = useRef(false);
 
   const timeReadout = activeVideo
     ? `${formatTime(playbackCurrentSec)} / ${formatTime(playbackDurationSec)}`
@@ -27,6 +41,8 @@ export function TransportBar() {
 
   const progressFraction =
     playbackDurationSec > 0 ? playbackCurrentSec / playbackDurationSec : 0;
+
+  const volumePercent = Math.round(volume * 100);
 
   const seekFromEvent = (clientX: number) => {
     const bar = seekBarRef.current;
@@ -56,8 +72,33 @@ export function TransportBar() {
     isScrubbing.current = false;
   };
 
+  const volumeFromEvent = (clientX: number) => {
+    const bar = volumeBarRef.current;
+    if (!bar) {
+      return;
+    }
+    setVolume(fractionFromPointer(clientX, bar.getBoundingClientRect()));
+  };
+
+  const handleVolumePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    isVolumeScrubbing.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    volumeFromEvent(event.clientX);
+  };
+
+  const handleVolumePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!isVolumeScrubbing.current) {
+      return;
+    }
+    volumeFromEvent(event.clientX);
+  };
+
+  const stopVolumeScrubbing = () => {
+    isVolumeScrubbing.current = false;
+  };
+
   return (
-    <div className="relative grid h-12 shrink-0 grid-cols-[1fr_auto_1fr] items-center px-4">
+    <div className="relative grid h-12 shrink-0 grid-cols-[1fr_auto_1fr] items-center">
       <div
         ref={seekBarRef}
         role="slider"
@@ -78,14 +119,49 @@ export function TransportBar() {
           />
         </div>
       </div>
-      {/* left zone (1fr) - reserved for future controls */}
-      <div className="flex items-center gap-1" />
-      <div className="flex items-center justify-center gap-3">
+      {/* left zone (1fr) - mute toggle + volume slider */}
+      <div className="flex h-full items-center gap-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={isMuted ? "Unmute" : "Mute"}
+          onClick={() => toggleMute()}
+          className={`${BAR_BUTTON} border-r border-border`}
+        >
+          {isMuted ? (
+            <VolumeX className="size-4" />
+          ) : (
+            <Volume2 className="size-4" />
+          )}
+        </Button>
+        <div
+          ref={volumeBarRef}
+          role="slider"
+          aria-label="Volume"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={volumePercent}
+          onPointerDown={handleVolumePointerDown}
+          onPointerMove={handleVolumePointerMove}
+          onPointerUp={stopVolumeScrubbing}
+          onPointerCancel={stopVolumeScrubbing}
+          className="flex h-2 w-24 cursor-pointer items-center"
+        >
+          <div className="h-px w-full bg-border">
+            <div
+              className="h-full bg-primary"
+              style={{ width: `${volumePercent}%` }}
+            />
+          </div>
+        </div>
+      </div>
+      <div className="flex h-full items-center justify-center">
         <Button
           variant="ghost"
           size="icon"
           aria-label="Previous"
           onClick={() => prevVideo()}
+          className={`${BAR_BUTTON} border-l border-border`}
         >
           <SkipBack className="size-4" />
         </Button>
@@ -94,6 +170,7 @@ export function TransportBar() {
           size="icon"
           aria-label={isPlaying ? "Pause" : "Play"}
           onClick={() => togglePlay()}
+          className={`${BAR_BUTTON} border-l border-border`}
         >
           {isPlaying ? (
             <Pause className="size-4" />
@@ -106,12 +183,18 @@ export function TransportBar() {
           size="icon"
           aria-label="Next"
           onClick={() => nextVideo()}
+          className={`${BAR_BUTTON} border-x border-border`}
         >
           <SkipForward className="size-4" />
         </Button>
       </div>
-      {/* right zone (1fr) - time readout, room for future controls */}
-      <div className="flex items-center justify-end gap-3">
+      {/* right zone (1fr) - rate readout (only off 1x) + time readout */}
+      <div className="flex items-center justify-end gap-3 pr-4">
+        {playbackRate !== 1 && (
+          <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
+            {playbackRate}x
+          </span>
+        )}
         <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
           {timeReadout}
         </span>
