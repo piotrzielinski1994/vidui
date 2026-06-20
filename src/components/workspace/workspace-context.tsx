@@ -11,6 +11,13 @@ import {
 import { type VideoNode } from "@/components/workspace/mock-data";
 import { sortVideos, type SortField } from "@/components/workspace/sort-natural";
 import { clampRate } from "@/components/workspace/clamp-rate";
+import {
+  decideOnEnded,
+  nextRepeatMode,
+  reconcileOrder,
+  shuffleIds,
+  type RepeatMode,
+} from "@/components/workspace/queue";
 
 type SortDirection = "asc" | "desc";
 
@@ -30,6 +37,8 @@ type WorkspaceContextValue = {
   isMuted: boolean;
   playbackRate: number;
   isFullscreen: boolean;
+  repeatMode: RepeatMode;
+  isShuffling: boolean;
   sortKeys: SortField[];
   sortDirection: SortDirection;
   isSidebarVisible: boolean;
@@ -48,6 +57,8 @@ type WorkspaceContextValue = {
   changeRate: (delta: number) => void;
   reportProgress: (currentSec: number, durationSec: number) => void;
   reportEnded: () => void;
+  cycleRepeat: () => void;
+  toggleShuffle: () => void;
   setFullscreen: (value: boolean) => void;
   toggleSortKey: (field: SortField) => void;
   toggleSortDirection: () => void;
@@ -63,6 +74,7 @@ type WorkspaceProviderProps = {
   initialActiveVideoId?: string;
   initialSortKeys?: SortField[];
   initialSortDirection?: SortDirection;
+  rng?: () => number;
 };
 
 export function WorkspaceProvider({
@@ -71,6 +83,7 @@ export function WorkspaceProvider({
   initialActiveVideoId,
   initialSortKeys = [],
   initialSortDirection = "asc",
+  rng = Math.random,
 }: WorkspaceProviderProps) {
   const [sourceVideos, setSourceVideos] = useState<VideoNode[]>(videos);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(
@@ -87,6 +100,9 @@ export function WorkspaceProvider({
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>("off");
+  const [isShuffling, setIsShuffling] = useState(false);
+  const [shuffleOrder, setShuffleOrder] = useState<string[]>([]);
   const [sortKeys, setSortKeys] = useState<SortField[]>(initialSortKeys);
   const [sortDirection, setSortDirection] =
     useState<SortDirection>(initialSortDirection);
@@ -171,19 +187,30 @@ export function WorkspaceProvider({
     [sourceVideos, sortKeys, sortDirection],
   );
 
+  // The order Next/Prev/auto-advance walk: the live sorted ids, or - when
+  // shuffling - the frozen shuffle order reconciled against the current ids
+  // (so appended videos slot in at the end and removed ones drop out).
+  const effectiveOrder = useMemo(() => {
+    const playlistIds = playlist.map((video) => video.id);
+    return isShuffling ? reconcileOrder(shuffleOrder, playlistIds) : playlistIds;
+  }, [playlist, isShuffling, shuffleOrder]);
+
   const value = useMemo<WorkspaceContextValue>(() => {
     const activate = activateVideo;
 
     const stepVideo = (delta: number) => {
-      if (playlist.length === 0 || activeVideoId === null) {
+      if (effectiveOrder.length === 0 || activeVideoId === null) {
         return;
       }
-      const index = playlist.findIndex((video) => video.id === activeVideoId);
+      const index = effectiveOrder.indexOf(activeVideoId);
       if (index === -1) {
         return;
       }
-      const next = playlist[(index + delta + playlist.length) % playlist.length];
-      activate(next.id);
+      const nextId =
+        effectiveOrder[
+          (index + delta + effectiveOrder.length) % effectiveOrder.length
+        ];
+      activate(nextId);
     };
 
     return {
@@ -202,6 +229,8 @@ export function WorkspaceProvider({
       isMuted,
       playbackRate,
       isFullscreen,
+      repeatMode,
+      isShuffling,
       sortKeys,
       sortDirection,
       isSidebarVisible,
@@ -269,7 +298,44 @@ export function WorkspaceProvider({
         setPlaybackDurationSec(durationSec);
         setSeekToSec(null);
       },
-      reportEnded: () => setIsPlaying(false),
+      reportEnded: () => {
+        if (activeVideoId === null) {
+          return;
+        }
+        const decision = decideOnEnded(
+          effectiveOrder,
+          activeVideoId,
+          repeatMode,
+        );
+        if (decision.kind === "advance") {
+          activate(decision.id);
+          return;
+        }
+        if (decision.kind === "replay") {
+          setPlaybackCurrentSec(0);
+          setSeekToSec(0);
+          setIsPlaying(true);
+          return;
+        }
+        setIsPlaying(false);
+      },
+      cycleRepeat: () => {
+        if (activeVideoId === null) {
+          return;
+        }
+        setRepeatMode(nextRepeatMode);
+      },
+      toggleShuffle: () => {
+        if (activeVideoId === null) {
+          return;
+        }
+        setIsShuffling((shuffling) => {
+          if (!shuffling) {
+            setShuffleOrder(shuffleIds(playlist.map((v) => v.id), rng));
+          }
+          return !shuffling;
+        });
+      },
       setFullscreen,
       toggleSortKey: (field) =>
         setSortKeys((current) =>
@@ -284,6 +350,7 @@ export function WorkspaceProvider({
     };
   }, [
     playlist,
+    effectiveOrder,
     selectedNodeId,
     activeVideoId,
     isPlaying,
@@ -294,6 +361,9 @@ export function WorkspaceProvider({
     isMuted,
     playbackRate,
     isFullscreen,
+    repeatMode,
+    isShuffling,
+    rng,
     setFullscreen,
     activateVideo,
     addVideos,

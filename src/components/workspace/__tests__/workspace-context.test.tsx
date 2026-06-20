@@ -19,6 +19,14 @@ const loadFixture: VideoNode[] = [
   { id: "l-2", name: "L2", format: "MKV", path: "/load/l2.mkv" },
 ];
 
+// 3-video list for the queue/repeat/shuffle behaviour. Open order is [A,B,C]
+// with stable ids qa,qb,qc so initialActiveVideoId is deterministic.
+const queueFixture: VideoNode[] = [
+  { id: "qa", name: "A", format: "MP4", path: "/q/a.mp4" },
+  { id: "qb", name: "B", format: "MP4", path: "/q/b.mp4" },
+  { id: "qc", name: "C", format: "MP4", path: "/q/c.mp4" },
+];
+
 // Thin probe that surfaces the context state as observable DOM, mirroring the
 // requi render-under-provider convention (no SUT mocking). Sort is now a
 // composite chain: `sortKeys` (selection-order priority) + `sortDirection`.
@@ -45,6 +53,19 @@ function Probe() {
       <output aria-label="transport-visible">
         {String(ws.isTransportVisible)}
       </output>
+      <output aria-label="repeat">{ws.repeatMode}</output>
+      <output aria-label="shuffling">{String(ws.isShuffling)}</output>
+      <button onClick={() => ws.cycleRepeat()}>do-cycle-repeat</button>
+      <button onClick={() => ws.toggleShuffle()}>do-toggle-shuffle</button>
+      <button
+        onClick={() =>
+          ws.addVideos([
+            { id: "qd", name: "D", format: "MP4", path: "/q/d.mp4" },
+          ])
+        }
+      >
+        do-add-d
+      </button>
       <button onClick={() => ws.toggleSidebar()}>do-toggle-sidebar</button>
       <button onClick={() => ws.toggleTransport()}>do-toggle-transport</button>
       <button onClick={() => ws.toggleSortKey("title")}>key-title</button>
@@ -403,10 +424,10 @@ describe("workspace context", () => {
     expect(screen.getByLabelText("duration")).toHaveTextContent("60");
   });
 
-  // side-effect-contract: reportEnded stops playback with no auto-advance (E-6 / AC-008-exclusion)
-  it("should set isPlaying false and keep the active video if reportEnded is called", async () => {
+  // side-effect-contract: last video + repeat=off -> reportEnded stops, active unchanged (TC-002 / AC-002)
+  it("should set isPlaying false and keep the active video if reportEnded is called on the last video with repeat off", async () => {
     const user = userEvent.setup();
-    renderProbe({ videos: fixtureVideos, initialActiveVideoId: "v-1" });
+    renderProbe({ videos: queueFixture, initialActiveVideoId: "qc" });
 
     await user.click(screen.getByRole("button", { name: "do-play" }));
     expect(screen.getByLabelText("playing")).toHaveTextContent("true");
@@ -414,7 +435,215 @@ describe("workspace context", () => {
     await user.click(screen.getByRole("button", { name: "do-ended" }));
 
     expect(screen.getByLabelText("playing")).toHaveTextContent("false");
-    expect(screen.getByLabelText("active-id")).toHaveTextContent("v-1");
+    expect(screen.getByLabelText("active-id")).toHaveTextContent("qc");
+  });
+
+  // behavior: mid-list + repeat=off -> reportEnded advances to next and keeps playing (TC-001 / AC-001)
+  it("should advance to the next video and keep playing if reportEnded is called mid-list with repeat off", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: queueFixture, initialActiveVideoId: "qa" });
+
+    await user.click(screen.getByRole("button", { name: "do-ended" }));
+
+    expect(screen.getByLabelText("active-id")).toHaveTextContent("qb");
+    expect(screen.getByLabelText("playing")).toHaveTextContent("true");
+  });
+
+  // behavior: repeat defaults to off and shuffle to false (spec §5 defaults)
+  it("should default repeatMode to off and isShuffling to false if just mounted", () => {
+    renderProbe({ videos: queueFixture, initialActiveVideoId: "qa" });
+
+    expect(screen.getByLabelText("repeat")).toHaveTextContent("off");
+    expect(screen.getByLabelText("shuffling")).toHaveTextContent("false");
+  });
+
+  // side-effect-contract: cycleRepeat steps off -> all -> one -> off (TC-008 / AC-007)
+  it("should cycle repeatMode off -> all -> one -> off if cycleRepeat is called three times", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: queueFixture, initialActiveVideoId: "qa" });
+
+    const cycle = screen.getByRole("button", { name: "do-cycle-repeat" });
+
+    await user.click(cycle);
+    expect(screen.getByLabelText("repeat")).toHaveTextContent("all");
+
+    await user.click(cycle);
+    expect(screen.getByLabelText("repeat")).toHaveTextContent("one");
+
+    await user.click(cycle);
+    expect(screen.getByLabelText("repeat")).toHaveTextContent("off");
+  });
+
+  // side-effect-contract: repeat=all wraps last -> first on ended, keeps playing (TC-003 / AC-003)
+  it("should wrap to the first video and keep playing if the last video ends with repeat all", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: queueFixture, initialActiveVideoId: "qc" });
+
+    await user.click(screen.getByRole("button", { name: "do-cycle-repeat" }));
+    expect(screen.getByLabelText("repeat")).toHaveTextContent("all");
+
+    await user.click(screen.getByRole("button", { name: "do-ended" }));
+
+    expect(screen.getByLabelText("active-id")).toHaveTextContent("qa");
+    expect(screen.getByLabelText("playing")).toHaveTextContent("true");
+  });
+
+  // side-effect-contract: repeat=one replays same video from 0 and keeps playing (TC-004 / AC-004)
+  it("should replay the same video from 0 and keep playing if a video ends with repeat one", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: queueFixture, initialActiveVideoId: "qb" });
+
+    const cycle = screen.getByRole("button", { name: "do-cycle-repeat" });
+    await user.click(cycle);
+    await user.click(cycle);
+    expect(screen.getByLabelText("repeat")).toHaveTextContent("one");
+
+    await user.click(screen.getByRole("button", { name: "do-progress" }));
+    expect(screen.getByLabelText("current")).toHaveTextContent("30");
+
+    await user.click(screen.getByRole("button", { name: "do-ended" }));
+
+    expect(screen.getByLabelText("active-id")).toHaveTextContent("qb");
+    expect(screen.getByLabelText("current")).toHaveTextContent("0");
+    expect(screen.getByLabelText("playing")).toHaveTextContent("true");
+  });
+
+  // side-effect-contract: toggleShuffle flips isShuffling on (TC-005 setup / AC-007)
+  it("should flip isShuffling to true if toggleShuffle is called", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: queueFixture, initialActiveVideoId: "qa" });
+
+    await user.click(screen.getByRole("button", { name: "do-toggle-shuffle" }));
+
+    expect(screen.getByLabelText("shuffling")).toHaveTextContent("true");
+  });
+
+  // behavior: toggling shuffle does not interrupt the active video or playback (TC-007 / AC-006)
+  it("should keep the active video and isPlaying unchanged if shuffle is toggled on", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: queueFixture, initialActiveVideoId: "qb" });
+
+    await user.click(screen.getByRole("button", { name: "do-play" }));
+    expect(screen.getByLabelText("playing")).toHaveTextContent("true");
+
+    await user.click(screen.getByRole("button", { name: "do-toggle-shuffle" }));
+
+    expect(screen.getByLabelText("active-id")).toHaveTextContent("qb");
+    expect(screen.getByLabelText("playing")).toHaveTextContent("true");
+  });
+
+  // behavior: with shuffle on, Next then Prev round-trips back to the same active (TC-005 / AC-005)
+  it("should return to the same active video if Next then Prev is called while shuffling", async () => {
+    // rng is injected only to make the frozen shuffle order deterministic; the
+    // assertion is a round-trip property that holds for ANY stable order.
+    const user = userEvent.setup();
+    renderProbe({
+      videos: queueFixture,
+      initialActiveVideoId: "qa",
+      rng: () => 0,
+    });
+
+    await user.click(screen.getByRole("button", { name: "do-toggle-shuffle" }));
+    await user.click(screen.getByRole("button", { name: "do-next" }));
+    await user.click(screen.getByRole("button", { name: "do-prev" }));
+
+    expect(screen.getByLabelText("active-id")).toHaveTextContent("qa");
+  });
+
+  // behavior: with shuffle on, ended advances along the shuffled order, same as manual Next (TC-006 / AC-005)
+  // repeat=all so ended always advances (wraps); the "ended == Next" invariant then holds at EVERY
+  // position. Under repeat=off it would correctly STOP at the shuffled order's last entry instead.
+  it("should auto-advance to the same id as Next would if a video ends while shuffling with repeat all", async () => {
+    const user = userEvent.setup();
+    renderProbe({
+      videos: queueFixture,
+      initialActiveVideoId: "qa",
+      rng: () => 0,
+    });
+
+    await user.click(screen.getByRole("button", { name: "do-cycle-repeat" }));
+    expect(screen.getByLabelText("repeat")).toHaveTextContent("all");
+    await user.click(screen.getByRole("button", { name: "do-toggle-shuffle" }));
+    await user.click(screen.getByRole("button", { name: "do-next" }));
+    const afterNext = screen.getByLabelText("active-id").textContent?.trim();
+
+    await user.click(screen.getByRole("button", { name: "do-prev" }));
+    await user.click(screen.getByRole("button", { name: "do-ended" }));
+
+    expect(screen.getByLabelText("active-id")).toHaveTextContent(
+      afterNext ?? "",
+    );
+    expect(screen.getByLabelText("playing")).toHaveTextContent("true");
+  });
+
+  // behavior: appending a video while shuffling slots it into the effective order
+  // without reshuffling (E-5). rng=()=>0 freezes the shuffle order to [qb,qc,qa];
+  // reconciling against [qa,qb,qc,qd] appends qd at the end -> [qb,qc,qa,qd], so
+  // Next from qa (no longer last) lands on the appended qd.
+  it("should append a dropped-in video to the shuffle order without reshuffling if added while shuffling", async () => {
+    const user = userEvent.setup();
+    renderProbe({
+      videos: queueFixture,
+      initialActiveVideoId: "qa",
+      rng: () => 0,
+    });
+
+    await user.click(screen.getByRole("button", { name: "do-toggle-shuffle" }));
+    await user.click(screen.getByRole("button", { name: "do-add-d" }));
+    await user.click(screen.getByRole("button", { name: "do-next" }));
+
+    expect(screen.getByLabelText("active-id")).toHaveTextContent("qd");
+  });
+
+  // behavior: changing the sort while shuffling does NOT reshuffle - the order is
+  // frozen at toggle-on (E-6). With the title key, asc playlist is [qa,qb,qc] so the
+  // frozen shuffle order (rng=0) is [qb,qc,qa]. Flipping to desc reorders the live
+  // playlist to [qc,qb,qa] - so Next from qa would wrap to qc if the live order were
+  // used, but the frozen order makes qa last -> wraps to qb. Asserting qb proves frozen.
+  it("should keep the frozen shuffle order if the sort direction is flipped while shuffling", async () => {
+    const user = userEvent.setup();
+    renderProbe({
+      videos: queueFixture,
+      initialActiveVideoId: "qa",
+      initialSortKeys: ["title"],
+      rng: () => 0,
+    });
+
+    await user.click(screen.getByRole("button", { name: "do-toggle-shuffle" }));
+    await user.click(screen.getByRole("button", { name: "flip-dir" }));
+    await user.click(screen.getByRole("button", { name: "do-next" }));
+
+    expect(screen.getByLabelText("active-id")).toHaveTextContent("qb");
+  });
+
+  // behavior: manual Next ignores repeat-one and advances (TC-009 / AC-007)
+  it("should advance to the next video if Next is called with repeat one", async () => {
+    const user = userEvent.setup();
+    renderProbe({ videos: queueFixture, initialActiveVideoId: "qa" });
+
+    const cycle = screen.getByRole("button", { name: "do-cycle-repeat" });
+    await user.click(cycle);
+    await user.click(cycle);
+    expect(screen.getByLabelText("repeat")).toHaveTextContent("one");
+
+    await user.click(screen.getByRole("button", { name: "do-next" }));
+
+    expect(screen.getByLabelText("active-id")).toHaveTextContent("qb");
+  });
+
+  // behavior: with no active video the queue verbs are no-ops and do not throw (TC-014 / E-1)
+  it("should not throw or change state if reportEnded, toggleShuffle, cycleRepeat run with no active video", async () => {
+    const user = userEvent.setup();
+    renderProbe({});
+
+    await user.click(screen.getByRole("button", { name: "do-ended" }));
+    await user.click(screen.getByRole("button", { name: "do-toggle-shuffle" }));
+    await user.click(screen.getByRole("button", { name: "do-cycle-repeat" }));
+
+    expect(screen.getByLabelText("active")).toHaveTextContent("none");
+    expect(screen.getByLabelText("playing")).toHaveTextContent("false");
+    expect(screen.getByLabelText("shuffling")).toHaveTextContent("false");
+    expect(screen.getByLabelText("repeat")).toHaveTextContent("off");
   });
 
   // side-effect-contract: loadVideos replaces the playlist, activates + plays the first (AC-002)

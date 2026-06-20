@@ -86,7 +86,13 @@ export function Viewport() {
       return;
     }
     element.currentTime = seekToSec;
-  }, [seekToSec]);
+    // A seek issued while isPlaying must resume the element. The play-effect
+    // only re-fires when isPlaying flips, so a replay-in-place (repeat-one: ended
+    // pauses the element, isPlaying stays true) would otherwise stay paused.
+    if (isPlaying && element.paused) {
+      void element.play().catch(logPlayError);
+    }
+  }, [seekToSec, isPlaying]);
 
   useEffect(() => {
     const element = videoRef.current;

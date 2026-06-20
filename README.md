@@ -74,13 +74,18 @@ Rust backend tests: `cd src-tauri && cargo test`.
 > `WorkspaceProvider` context (no prop drilling). The `/settings` route still exists (no in-UI link
 > yet); the `greet` Tauri command stays wired as the IPC proof for later use. A `Mod+K` command
 > palette (cmdk) lists the workspace actions (open files, play/pause, next, prev, relative seek,
-> volume up/down, mute, speed up/down, toggle sort, toggle sidebar, toggle transport bar); each
+> volume up/down, mute, speed up/down, toggle shuffle, cycle repeat, toggle sort, toggle sidebar,
+> toggle transport bar); each
 > action also has its own global hotkey. **Extended transport:** arrows seek the active video
 > (Left/Right ±5s, Shift+Left/Right ±1s), Up/Down adjust volume (±5%) and `M` mutes (mute button +
 > volume slider in the transport bar), `[`/`]` step playback speed by 0.1x within 0.5x-2x (a rate
-> readout shows in the bar only when off 1x). Bindings are fixed defaults - no user remapping or
-> persistence yet (playlist + panel visibility reset on reload).
-> Not yet: subtitles, auto-advance on end, playlist persistence.
+> readout shows in the bar only when off 1x). **Queue playback:** when a video ends it auto-advances
+> to the next; a repeat control (`R`, off -> all -> one) loops the list or replays one, and a shuffle
+> toggle (`S`) plays a stable shuffled order that drives both auto-advance and next/prev. With repeat
+> off, the last video's end stops playback (no wrap); repeat-all wraps. Both are buttons in the
+> transport bar. Bindings are fixed defaults - no user remapping or
+> persistence yet (playlist, panel visibility, and queue modes reset on reload).
+> Not yet: subtitles, playlist persistence.
 
 ## Repo layout
 

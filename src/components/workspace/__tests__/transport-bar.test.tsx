@@ -211,6 +211,37 @@ describe("TransportBar", () => {
     expect(screen.getByLabelText("seek-target")).toHaveTextContent("30");
   });
 
+  // behavior: the bar shows shuffle + repeat controls reflecting state (TC-013 / AC-008)
+  it("should render an unpressed shuffle control and a 'Repeat: off' control if mounted", () => {
+    renderTransport("v-1");
+
+    const shuffle = screen.getByRole("button", { name: /shuffle/i });
+    expect(shuffle).toHaveAttribute("aria-pressed", "false");
+    expect(
+      screen.getByRole("button", { name: "Repeat: off" }),
+    ).toBeInTheDocument();
+  });
+
+  // side-effect-contract: clicking shuffle presses it; cycling repeat twice -> name "one" (TC-013 / AC-008)
+  it("should press the shuffle control and read 'Repeat: one' if shuffle is clicked and repeat cycled twice", async () => {
+    const user = userEvent.setup();
+    renderTransport("v-1");
+
+    await user.click(screen.getByRole("button", { name: /shuffle/i }));
+    expect(screen.getByRole("button", { name: /shuffle/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    const repeat = screen.getByRole("button", { name: "Repeat: off" });
+    await user.click(repeat);
+    await user.click(screen.getByRole("button", { name: "Repeat: all" }));
+
+    expect(
+      screen.getByRole("button", { name: "Repeat: one" }),
+    ).toBeInTheDocument();
+  });
+
   // behavior: prev/next follow the CURRENT sorted order when a sort key is active (AC-008)
   it("should step to the natural-next video if next is clicked with the title sort key active", async () => {
     const user = userEvent.setup();

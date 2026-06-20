@@ -13,6 +13,8 @@ export type ShortcutActionId =
   | "toggle-mute"
   | "speed-up"
   | "speed-down"
+  | "toggle-shuffle"
+  | "cycle-repeat"
   | "toggle-sort-direction"
   | "toggle-sidebar"
   | "toggle-transport";
@@ -108,6 +110,18 @@ export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = [
     name: "Speed down",
     description: "Decrease playback speed by 0.1x (down to 0.5x).",
     defaultHotkey: "[",
+  },
+  {
+    id: "toggle-shuffle",
+    name: "Toggle shuffle",
+    description: "Shuffle the play order for next/prev and auto-advance.",
+    defaultHotkey: "S",
+  },
+  {
+    id: "cycle-repeat",
+    name: "Cycle repeat",
+    description: "Cycle repeat mode: off, all, then one.",
+    defaultHotkey: "R",
   },
   {
     id: "toggle-sort-direction",

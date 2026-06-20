@@ -37,6 +37,16 @@ function PlayingProbe() {
   return <output aria-label="playing">{String(isPlaying)}</output>;
 }
 
+function CycleRepeatButton() {
+  const { cycleRepeat } = useWorkspace();
+  return <button onClick={() => cycleRepeat()}>cycle-repeat</button>;
+}
+
+function TogglePlayButton() {
+  const { togglePlay } = useWorkspace();
+  return <button onClick={() => togglePlay()}>toggle-play</button>;
+}
+
 const region = () => screen.getByRole("region", { name: /video viewport/i });
 const findVideo = async () => {
   await waitFor(() =>
@@ -158,6 +168,35 @@ describe("Viewport", () => {
     const video = await findVideo();
     fireEvent.loadedData(video);
 
+    expect(video.paused).toBe(false);
+  });
+
+  // behavior: repeat-one replays the finished video - on ended the same element seeks
+  // to 0 AND resumes playback even though isPlaying was already true (FR-4 repeat-one).
+  it("should resume playback from 0 on ended if repeat is one", async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkspaceProvider videos={fixtureVideos} initialActiveVideoId="v-3">
+        <Viewport />
+        <CycleRepeatButton />
+        <TogglePlayButton />
+      </WorkspaceProvider>,
+    );
+
+    const video = await findVideo();
+    await user.click(screen.getByRole("button", { name: "cycle-repeat" }));
+    await user.click(screen.getByRole("button", { name: "cycle-repeat" }));
+    // Start playback so isPlaying is ALREADY true when the video ends - the real
+    // repeat-one path (the bug: flipping isPlaying true->true won't re-fire play).
+    await user.click(screen.getByRole("button", { name: "toggle-play" }));
+
+    fireEvent.loadedData(video);
+    // A real browser PAUSES the element when it fires `ended`; jsdom doesn't, so
+    // pause it explicitly to reproduce the post-end paused state before replaying.
+    video.pause();
+    fireEvent.ended(video);
+
+    await waitFor(() => expect(video.currentTime).toBe(0));
     expect(video.paused).toBe(false);
   });
 

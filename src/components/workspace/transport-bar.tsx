@@ -1,5 +1,15 @@
 import { useRef, type PointerEvent as ReactPointerEvent } from "react";
-import { Pause, Play, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
+import {
+  Pause,
+  Play,
+  Repeat,
+  Repeat1,
+  Shuffle,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace/workspace-context";
 import { formatTime } from "@/components/workspace/format-time";
@@ -23,12 +33,16 @@ export function TransportBar() {
     volume,
     isMuted,
     playbackRate,
+    repeatMode,
+    isShuffling,
     togglePlay,
     nextVideo,
     prevVideo,
     seek,
     setVolume,
     toggleMute,
+    cycleRepeat,
+    toggleShuffle,
   } = useWorkspace();
   const seekBarRef = useRef<HTMLDivElement>(null);
   const isScrubbing = useRef(false);
@@ -119,8 +133,8 @@ export function TransportBar() {
           />
         </div>
       </div>
-      {/* left zone (1fr) - mute toggle + volume slider */}
-      <div className="flex h-full items-center gap-3">
+      {/* left zone (1fr) - mute toggle + volume slider + shuffle + repeat */}
+      <div className="flex h-full items-center">
         <Button
           variant="ghost"
           size="icon"
@@ -145,7 +159,7 @@ export function TransportBar() {
           onPointerMove={handleVolumePointerMove}
           onPointerUp={stopVolumeScrubbing}
           onPointerCancel={stopVolumeScrubbing}
-          className="flex h-2 w-24 cursor-pointer items-center"
+          className="mx-3 flex h-2 w-24 cursor-pointer items-center"
         >
           <div className="h-px w-full bg-border">
             <div
@@ -154,6 +168,33 @@ export function TransportBar() {
             />
           </div>
         </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Shuffle"
+          aria-pressed={isShuffling}
+          onClick={() => toggleShuffle()}
+          className={`${BAR_BUTTON} border-l border-border ${
+            isShuffling ? "text-foreground" : "text-muted-foreground"
+          }`}
+        >
+          <Shuffle className="size-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={`Repeat: ${repeatMode}`}
+          onClick={() => cycleRepeat()}
+          className={`${BAR_BUTTON} border-l border-border ${
+            repeatMode === "off" ? "text-muted-foreground" : "text-foreground"
+          }`}
+        >
+          {repeatMode === "one" ? (
+            <Repeat1 className="size-4" />
+          ) : (
+            <Repeat className="size-4" />
+          )}
+        </Button>
       </div>
       <div className="flex h-full items-center justify-center">
         <Button
