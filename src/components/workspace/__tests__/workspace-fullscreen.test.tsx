@@ -13,7 +13,8 @@ import { fixtureVideos } from "./fixtures";
 
 vi.mock("@/lib/tauri", () => ({
   logPlayback: vi.fn(() => Promise.resolve()),
-  prepareMediaUrl: (path: string) => Promise.resolve(`asset://localhost${path}`),
+  prepareMediaUrl: (path: string) =>
+    Promise.resolve({ url: `asset://localhost${path}`, durationSec: null }),
   openVideoFiles: vi.fn(() => Promise.resolve([])),
 }));
 

@@ -15,7 +15,8 @@ const openVideoFiles = vi.fn();
 vi.mock("@/lib/tauri", () => ({
   logPlayback: vi.fn(() => Promise.resolve()),
   openVideoFiles: () => openVideoFiles(),
-  prepareMediaUrl: (path: string) => Promise.resolve(`asset://localhost${path}`),
+  prepareMediaUrl: (path: string) =>
+    Promise.resolve({ url: `asset://localhost${path}`, durationSec: null }),
   toggleFullscreen: vi.fn(() => Promise.resolve()),
   watchFullscreen: vi.fn(() => Promise.resolve(() => {})),
   watchWindowFocus: vi.fn(() => Promise.resolve(() => {})),

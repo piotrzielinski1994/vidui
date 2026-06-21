@@ -3,16 +3,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock the Tauri JS plugins/api that tauri.ts wraps. tauri.ts is the SUT here,
 // so we mock only the underlying Tauri primitives, never tauri.ts itself.
 const open = vi.fn();
+const invoke = vi.fn();
+const convertFileSrc = vi.fn((path: string) => `asset://localhost/${path}`);
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: (...args: unknown[]) => open(...args),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(),
+  invoke: (...args: unknown[]) => invoke(...args),
+  convertFileSrc: (path: string) => convertFileSrc(path),
 }));
 
-import { openVideoFiles } from "@/lib/tauri";
+import { openVideoFiles, prepareMediaUrl } from "@/lib/tauri";
 
 describe("openVideoFiles", () => {
   beforeEach(() => {
@@ -50,5 +53,41 @@ describe("openVideoFiles", () => {
     expect(open).toHaveBeenCalledWith(
       expect.objectContaining({ multiple: true }),
     );
+  });
+});
+
+describe("prepareMediaUrl", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // behavior: an http(s) URL (HLS playlist) is played as-is, NOT routed through the asset protocol (AC-007)
+  it("should return an http url unchanged if the backend streams via HLS", async () => {
+    invoke.mockResolvedValue({
+      path: "http://localhost:51234/0/index.m3u8",
+      transcoded: true,
+      durationSec: 1922.581,
+    });
+
+    await expect(prepareMediaUrl("/v/clip.mkv")).resolves.toEqual({
+      url: "http://localhost:51234/0/index.m3u8",
+      durationSec: 1922.581,
+    });
+    expect(convertFileSrc).not.toHaveBeenCalled();
+  });
+
+  // behavior: a plain file path (passthrough) is fed through convertFileSrc -> asset protocol (AC-007)
+  it("should route a file path through the asset protocol if the backend returns a path", async () => {
+    invoke.mockResolvedValue({
+      path: "/v/clip.mp4",
+      transcoded: false,
+      durationSec: null,
+    });
+
+    await expect(prepareMediaUrl("/v/clip.mp4")).resolves.toEqual({
+      url: "asset://localhost//v/clip.mp4",
+      durationSec: null,
+    });
+    expect(convertFileSrc).toHaveBeenCalledWith("/v/clip.mp4");
   });
 });

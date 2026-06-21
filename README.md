@@ -58,11 +58,13 @@ Rust backend tests: `cd src-tauri && cargo test`.
 > first imported video (drop never disturbs an already-playing video). The viewport renders a real `<video>`; play/pause, prev/next, and clicking a row all
 > drive playback. Spacebar toggles play/pause. **Universal playback:** every opened file is probed
 > by a Rust `prepare_media` command (ffprobe reads container + codecs); H.264/AAC already in an
-> MP4/MOV plays directly. Anything else is converted by ffmpeg to a **complete, finalized** MP4
-> (`+faststart`) before playback - copying the streams that are already fine and re-encoding only
-> those the webview can't decode: a wrong-container-only file (H.264 in MKV/AVI) is remuxed with
-> stream-copy (near-instant), while undecodable codecs (VP9/AV1/HEVC/Opus) are re-encoded (slower,
-> spinner shows until done). The completed transcode is cached and reused on re-open. Single-clicking the viewport toggles
+> MP4/MOV plays directly via the asset protocol. Anything else **streams as HLS** so playback
+> starts almost immediately (like VLC) instead of waiting for a full transcode: ffmpeg writes an
+> HLS playlist + segments progressively into a temp dir, a tiny loopback HTTP server (127.0.0.1)
+> serves them, and the webview's native HLS player starts on the first segment (~0.1s) while the
+> encoder races ahead - copying streams that are already fine (`-c:v copy`) and re-encoding only
+> what the webview can't decode (VP9/AV1/HEVC/Opus). There is no persistent cache: each playback
+> streams fresh and is cleaned up when the file changes or the app exits. Single-clicking the viewport toggles
 > play/pause; double-clicking it (or the green button /
 > F11) enters fullscreen, which hides the chrome (sidebar, transport, overlay) and restores the
 > pre-fullscreen visibility on exit. **ffmpeg/ffprobe are bundled** as Tauri sidecars
@@ -119,7 +121,7 @@ src/
   lib/                  tauri.ts (typed invoke wrappers), utils.ts (cn), shortcuts/ (action registry + resolve overrides + global hotkeys), settings/ (Settings ADT + merge, tauri-plugin-store persistence, SettingsProvider)
   index.css             Tailwind v4 + theme tokens
   test/setup.ts         Vitest + Testing Library setup
-src-tauri/              Rust desktop shell: greet, media.rs (ffprobe/ffmpeg prepare_media via bundled sidecars, logs plan/cache/elapsed), import.rs (expand_dropped_paths - folder-walk + ext filter for drag-drop), focus.rs (WKWebView first-responder fix), logging.rs (per-launch log filename), binaries/ (gitignored ffmpeg sidecars), tauri.conf.json
+src-tauri/              Rust desktop shell: greet, media.rs (ffprobe/ffmpeg prepare_media via bundled sidecars - HLS-streams unplayable files, logs plan/timing), hls_server.rs (loopback HTTP server serving the HLS temp dir to the webview's native player), import.rs (expand_dropped_paths - folder-walk + ext filter for drag-drop), focus.rs (WKWebView first-responder fix), logging.rs (per-launch log filename), binaries/ (gitignored ffmpeg sidecars), tauri.conf.json
 scripts/                fetch-ffmpeg.sh (download bundled ffmpeg/ffprobe sidecars)
 tests/e2e/              Behavior smoke tests
 docs/                   spec/plan per feature, ADR, learnings

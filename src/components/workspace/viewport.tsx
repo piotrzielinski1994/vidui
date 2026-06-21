@@ -17,8 +17,18 @@ type TimelineMarks = {
 };
 
 type SourceState =
-  | { status: "ready"; forId: string; url: string }
+  | { status: "ready"; forId: string; url: string; durationSec: number | null }
   | { status: "error"; forId: string; message: string };
+
+// HLS streams report `<video>.duration` as Infinity (and NaN before metadata),
+// so prefer the element's value only when it's a real finite length; otherwise
+// fall back to the duration ffprobe gave us at prepare time.
+function resolveDuration(elementDuration: number, probed: number | null): number {
+  if (Number.isFinite(elementDuration) && elementDuration > 0) {
+    return elementDuration;
+  }
+  return probed ?? 0;
+}
 
 export function Viewport() {
   const {
@@ -101,13 +111,13 @@ export function Viewport() {
       firstFrameAtMs: null,
     };
     prepareMediaUrl(activeVideo.path)
-      .then((url) => {
+      .then(({ url, durationSec }) => {
         const marks = timelineRef.current;
         if (marks && marks.forId === forId) {
           marks.prepareResolvedAtMs = performance.now();
         }
         if (!cancelled) {
-          setSource({ status: "ready", forId, url });
+          setSource({ status: "ready", forId, url, durationSec });
         }
       })
       .catch((error) => {
@@ -208,13 +218,19 @@ export function Viewport() {
             onTimeUpdate={(event) =>
               reportProgress(
                 event.currentTarget.currentTime,
-                event.currentTarget.duration || 0,
+                resolveDuration(
+                  event.currentTarget.duration,
+                  sourceForActive.durationSec,
+                ),
               )
             }
             onLoadedMetadata={(event) =>
               reportProgress(
                 event.currentTarget.currentTime,
-                event.currentTarget.duration || 0,
+                resolveDuration(
+                  event.currentTarget.duration,
+                  sourceForActive.durationSec,
+                ),
               )
             }
             onEnded={() => reportEnded()}

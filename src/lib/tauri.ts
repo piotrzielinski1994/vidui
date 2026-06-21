@@ -21,14 +21,28 @@ export async function openVideoFiles(): Promise<string[]> {
   return Array.isArray(selection) ? selection : [selection];
 }
 
-export type PreparedMedia = { path: string; transcoded: boolean };
+export type PreparedMedia = {
+  path: string;
+  transcoded: boolean;
+  durationSec: number | null;
+};
 
-// Probe the file; if the webview can't decode it (e.g. AV1/VP9/Opus), the Rust
-// side transcodes to an H.264/AAC mp4 and returns that path. Either way the
-// returned path is fed through the asset protocol to <video>.
-export async function prepareMediaUrl(path: string): Promise<string> {
+export type PreparedSource = { url: string; durationSec: number | null };
+
+// Probe the file. If the webview can't decode it (e.g. AV1/VP9/Opus), the Rust
+// side streams it as HLS and returns an http://localhost playlist URL, which the
+// webview's native HLS player loads directly. A playable file instead comes back
+// as a path, fed through the asset protocol. We branch on the URL scheme.
+// `durationSec` is the real source length: an HLS stream's own duration reads
+// Infinity until it ends, so the FE falls back to this for the transport readout.
+export async function prepareMediaUrl(path: string): Promise<PreparedSource> {
   const prepared = await invoke<PreparedMedia>("prepare_media", { path });
-  return convertFileSrc(prepared.path);
+  const isUrl =
+    prepared.path.startsWith("http://") || prepared.path.startsWith("https://");
+  return {
+    url: isUrl ? prepared.path : convertFileSrc(prepared.path),
+    durationSec: prepared.durationSec,
+  };
 }
 
 // Send a preformatted playback-timeline line to the Rust log file (same file as

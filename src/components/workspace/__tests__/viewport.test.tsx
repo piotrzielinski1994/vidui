@@ -15,8 +15,9 @@ import {
 import { Viewport } from "@/components/workspace/viewport";
 import { fixtureVideos } from "./fixtures";
 
-const prepareMediaUrl = vi.fn((path: string) =>
-  Promise.resolve(`asset://localhost${path}`),
+const prepareMediaUrl = vi.fn(
+  (path: string): Promise<{ url: string; durationSec: number | null }> =>
+    Promise.resolve({ url: `asset://localhost${path}`, durationSec: null }),
 );
 
 const toggleFullscreen = vi.fn(() => Promise.resolve());
@@ -50,6 +51,11 @@ function CycleRepeatButton() {
 function TogglePlayButton() {
   const { togglePlay } = useWorkspace();
   return <button onClick={() => togglePlay()}>toggle-play</button>;
+}
+
+function DurationProbe() {
+  const { playbackDurationSec } = useWorkspace();
+  return <output aria-label="duration">{playbackDurationSec}</output>;
 }
 
 const region = () => screen.getByRole("region", { name: /video viewport/i });
@@ -125,9 +131,12 @@ describe("Viewport", () => {
 
   // behavior: a preparing state shows while the file is probed/transcoded (AC-004)
   it("should show a preparing state before the source is ready", async () => {
-    let resolvePrepare: (url: string) => void = () => {};
+    let resolvePrepare: (source: {
+      url: string;
+      durationSec: number | null;
+    }) => void = () => {};
     prepareMediaUrl.mockReturnValueOnce(
-      new Promise<string>((resolve) => {
+      new Promise<{ url: string; durationSec: number | null }>((resolve) => {
         resolvePrepare = resolve;
       }),
     );
@@ -139,8 +148,39 @@ describe("Viewport", () => {
 
     expect(within(region()).getByText(/preparing/i)).toBeInTheDocument();
 
-    resolvePrepare("asset://localhost/videos/3 - Intro.mov");
+    resolvePrepare({
+      url: "asset://localhost/videos/3 - Intro.mov",
+      durationSec: null,
+    });
     await findVideo();
+  });
+
+  // behavior: HLS streams report element.duration as Infinity, so the probed
+  // duration is used for the readout instead of the bogus element value
+  it("should report the probed duration if the element duration is not finite", async () => {
+    prepareMediaUrl.mockResolvedValueOnce({
+      url: "http://localhost:5000/0/index.m3u8",
+      durationSec: 1922.581,
+    });
+    render(
+      <WorkspaceProvider videos={fixtureVideos} initialActiveVideoId="v-3">
+        <Viewport />
+        <DurationProbe />
+      </WorkspaceProvider>,
+    );
+
+    const video = await findVideo();
+    Object.defineProperty(video, "duration", {
+      configurable: true,
+      value: Infinity,
+    });
+    fireEvent(video, new Event("loadedmetadata"));
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("duration").textContent,
+      ).toBe("1922.581"),
+    );
   });
 
   // behavior: a prepare failure surfaces an error, never a silent black screen (AC-004)
