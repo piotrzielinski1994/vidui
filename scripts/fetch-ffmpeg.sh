@@ -10,7 +10,7 @@
 # locally and in CI before `npm start` / `npm run tauri build`.
 #
 # Licensing (see docs/adr.md): macOS uses a GPLv3 static build (no off-the-shelf
-# LGPL static macOS build exists); Windows uses an LGPLv3 static build.
+# LGPL static macOS build exists); Windows and Linux use an LGPLv3 static build.
 #
 # Usage: scripts/fetch-ffmpeg.sh            # all triples
 #        scripts/fetch-ffmpeg.sh <triple>   # just one
@@ -25,6 +25,7 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 MR_ARM="https://ffmpeg.martin-riedl.de/download/macos/arm64/1778761665_8.1.1"
 MR_AMD="https://ffmpeg.martin-riedl.de/download/macos/amd64/1778768838_8.1.1"
 BTBN="https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-18-14-21/ffmpeg-n8.1.2-win64-lgpl-8.1.zip"
+BTBN_LINUX="https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-06-18-14-21/ffmpeg-n8.1.2-linux64-lgpl-8.1.tar.xz"
 
 # SHA-256 of each placed binary. Empty string = not yet pinned: the script will
 # print the computed digest and skip verification so you can paste it back here.
@@ -35,6 +36,8 @@ declare -A SHA256=(
   ["ffprobe-x86_64-apple-darwin"]="cb39232c06f663e97917798ed75f7538341367401f9c180f10646193a7a29a54"
   ["ffmpeg-x86_64-pc-windows-msvc.exe"]="381508c710b161c29a72ea410a3faaf269e8e90eec038f4d8034a8596daf1163"
   ["ffprobe-x86_64-pc-windows-msvc.exe"]="5ae7408f3b255fb939958f37e59e752750896ec4c311d3578e13ca004047f7df"
+  ["ffmpeg-x86_64-unknown-linux-gnu"]="24c0fdc25b52e086fffda2bde3986cae4ff407b4e6420266cebbd04299dae088"
+  ["ffprobe-x86_64-unknown-linux-gnu"]="092bd8724eef8d07a003959906199c7dc0bcce6547b79216f0e29ddbd1bb4f44"
 )
 
 sha256_of() {
@@ -103,16 +106,35 @@ fetch_windows() {
   place "ffprobe-$triple.exe" "$inner/bin/ffprobe.exe"
 }
 
+fetch_linux() {
+  local triple="x86_64-unknown-linux-gnu"
+  if have "ffmpeg-$triple" "ffprobe-$triple"; then
+    echo "$triple: present, skipping"
+    return
+  fi
+  echo "$triple: downloading (BtbN, LGPLv3)"
+  local d="$WORK_DIR/$triple"
+  mkdir -p "$d"
+  curl -fsSL "$BTBN_LINUX" -o "$d/ffmpeg.tar.xz"
+  tar -xf "$d/ffmpeg.tar.xz" -C "$d"
+  local inner
+  inner="$(find "$d" -type d -name 'ffmpeg-n8.1.2-linux64-lgpl-8.1' | head -1)"
+  place "ffmpeg-$triple" "$inner/bin/ffmpeg"
+  place "ffprobe-$triple" "$inner/bin/ffprobe"
+}
+
 mkdir -p "$BIN_DIR"
 TARGET="${1:-all}"
 case "$TARGET" in
   aarch64-apple-darwin) fetch_macos aarch64-apple-darwin "$MR_ARM" ;;
   x86_64-apple-darwin)  fetch_macos x86_64-apple-darwin "$MR_AMD" ;;
   x86_64-pc-windows-msvc) fetch_windows ;;
+  x86_64-unknown-linux-gnu) fetch_linux ;;
   all)
     fetch_macos aarch64-apple-darwin "$MR_ARM"
     fetch_macos x86_64-apple-darwin "$MR_AMD"
     fetch_windows
+    fetch_linux
     ;;
   *) echo "unknown triple: $TARGET" >&2; exit 1 ;;
 esac
