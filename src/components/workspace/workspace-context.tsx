@@ -12,6 +12,10 @@ import { type VideoNode } from "@/components/workspace/mock-data";
 import { sortVideos, type SortField } from "@/components/workspace/sort-natural";
 import { clampRate } from "@/components/workspace/clamp-rate";
 import {
+  clampSeekTarget,
+  FRAME_STEP_SEC,
+} from "@/components/workspace/frame-step";
+import {
   decideOnEnded,
   nextRepeatMode,
   reconcileOrder,
@@ -51,6 +55,7 @@ type WorkspaceContextValue = {
   prevVideo: () => void;
   seek: (sec: number) => void;
   seekBy: (delta: number) => void;
+  stepFrame: (direction: 1 | -1) => void;
   setVolume: (value: number) => void;
   changeVolume: (delta: number) => void;
   toggleMute: () => void;
@@ -288,12 +293,24 @@ export function WorkspaceProvider({
         if (activeVideoId === null) {
           return;
         }
-        const target = playbackCurrentSec + delta;
-        const lowerClamped = Math.max(0, target);
-        const clamped =
-          playbackDurationSec > 0
-            ? Math.min(playbackDurationSec, lowerClamped)
-            : lowerClamped;
+        const clamped = clampSeekTarget(
+          playbackCurrentSec,
+          delta,
+          playbackDurationSec,
+        );
+        setPlaybackCurrentSec(clamped);
+        setSeekToSec(clamped);
+      },
+      stepFrame: (direction) => {
+        if (activeVideoId === null) {
+          return;
+        }
+        setIsPlaying(false);
+        const clamped = clampSeekTarget(
+          playbackCurrentSec,
+          direction * FRAME_STEP_SEC,
+          playbackDurationSec,
+        );
         setPlaybackCurrentSec(clamped);
         setSeekToSec(clamped);
       },

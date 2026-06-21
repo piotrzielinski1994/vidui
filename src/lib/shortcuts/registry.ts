@@ -10,6 +10,8 @@ export type ShortcutActionId =
   | "seek-back"
   | "seek-forward-fine"
   | "seek-back-fine"
+  | "frame-step-forward"
+  | "frame-step-back"
   | "volume-up"
   | "volume-down"
   | "toggle-mute"
@@ -99,6 +101,20 @@ export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = [
     name: "Seek back 1s",
     description: "Jump the active video back by 1 second.",
     defaultHotkey: "Shift+ArrowLeft",
+  },
+  {
+    id: "frame-step-forward",
+    name: "Frame step forward",
+    description: "Pause and advance the active video by one frame (1/30s).",
+    defaultHotkey: ".",
+    keywords: ["frame", "step", "advance", "next frame"],
+  },
+  {
+    id: "frame-step-back",
+    name: "Frame step back",
+    description: "Pause and step the active video back by one frame (1/30s).",
+    defaultHotkey: ",",
+    keywords: ["frame", "step", "previous frame"],
   },
   {
     id: "volume-up",
