@@ -29,16 +29,21 @@ BTBN_LINUX="https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-20
 
 # SHA-256 of each placed binary. Empty string = not yet pinned: the script will
 # print the computed digest and skip verification so you can paste it back here.
-declare -A SHA256=(
-  ["ffmpeg-aarch64-apple-darwin"]="ef4fe121377039053b0d7bed4a9aa46e7912918f5ba6424a1dd155f4eed625b0"
-  ["ffprobe-aarch64-apple-darwin"]="3ec76ddd72068162294249465c36257d6c1add564f9b078e31e173837832967d"
-  ["ffmpeg-x86_64-apple-darwin"]="6a2c2884161d883fbb1ef21a0223475283eb4e381ee870956719f59f32daf74c"
-  ["ffprobe-x86_64-apple-darwin"]="cb39232c06f663e97917798ed75f7538341367401f9c180f10646193a7a29a54"
-  ["ffmpeg-x86_64-pc-windows-msvc.exe"]="381508c710b161c29a72ea410a3faaf269e8e90eec038f4d8034a8596daf1163"
-  ["ffprobe-x86_64-pc-windows-msvc.exe"]="5ae7408f3b255fb939958f37e59e752750896ec4c311d3578e13ca004047f7df"
-  ["ffmpeg-x86_64-unknown-linux-gnu"]="24c0fdc25b52e086fffda2bde3986cae4ff407b4e6420266cebbd04299dae088"
-  ["ffprobe-x86_64-unknown-linux-gnu"]="092bd8724eef8d07a003959906199c7dc0bcce6547b79216f0e29ddbd1bb4f44"
-)
+# A case lookup (not an associative array) so this runs on bash 3.2 - the macOS
+# system bash, which is what GitHub's macOS runners execute the script with.
+sha256_for() {
+  case "$1" in
+    ffmpeg-aarch64-apple-darwin)        echo "ef4fe121377039053b0d7bed4a9aa46e7912918f5ba6424a1dd155f4eed625b0" ;;
+    ffprobe-aarch64-apple-darwin)       echo "3ec76ddd72068162294249465c36257d6c1add564f9b078e31e173837832967d" ;;
+    ffmpeg-x86_64-apple-darwin)         echo "6a2c2884161d883fbb1ef21a0223475283eb4e381ee870956719f59f32daf74c" ;;
+    ffprobe-x86_64-apple-darwin)        echo "cb39232c06f663e97917798ed75f7538341367401f9c180f10646193a7a29a54" ;;
+    ffmpeg-x86_64-pc-windows-msvc.exe)  echo "381508c710b161c29a72ea410a3faaf269e8e90eec038f4d8034a8596daf1163" ;;
+    ffprobe-x86_64-pc-windows-msvc.exe) echo "5ae7408f3b255fb939958f37e59e752750896ec4c311d3578e13ca004047f7df" ;;
+    ffmpeg-x86_64-unknown-linux-gnu)    echo "24c0fdc25b52e086fffda2bde3986cae4ff407b4e6420266cebbd04299dae088" ;;
+    ffprobe-x86_64-unknown-linux-gnu)   echo "092bd8724eef8d07a003959906199c7dc0bcce6547b79216f0e29ddbd1bb4f44" ;;
+    *) echo "" ;;
+  esac
+}
 
 sha256_of() {
   if command -v shasum >/dev/null 2>&1; then
@@ -51,7 +56,8 @@ sha256_of() {
 # place <dest-name> <file>
 place() {
   local name="$1" file="$2"
-  local want="${SHA256[$name]:-}"
+  local want
+  want="$(sha256_for "$name")"
   local got
   got="$(sha256_of "$file")"
   if [ -z "$want" ] || [ "$want" = "REPLACE_ME" ]; then
