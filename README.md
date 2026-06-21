@@ -25,9 +25,9 @@ scripts/fetch-ffmpeg.sh   # download the bundled ffmpeg/ffprobe sidecars (requir
 ```
 
 `scripts/fetch-ffmpeg.sh` downloads statically-linked `ffmpeg`+`ffprobe` for all
-supported targets into `src-tauri/binaries/` (gitignored, SHA-256 pinned). `cargo`
-fails to build without the binary for your host triple present. macOS binaries are
-GPLv3, Windows is LGPLv3 - see [docs/adr.md](docs/adr.md).
+supported targets (macOS arm64/x64, Windows x64, Linux x64) into `src-tauri/binaries/`
+(gitignored, SHA-256 pinned). `cargo` fails to build without the binary for your host triple
+present. macOS binaries are GPLv3, Windows and Linux are LGPLv3 - see [docs/adr.md](docs/adr.md).
 
 ## Commands
 
@@ -44,6 +44,17 @@ GPLv3, Windows is LGPLv3 - see [docs/adr.md](docs/adr.md).
 | `npm run test:watch` | Vitest in watch mode. |
 
 Rust backend tests: `cd src-tauri && cargo test`.
+
+## Releasing installers
+
+The [`Release` workflow](.github/workflows/release.yml) builds installers for all three OSes and
+publishes them to a GitHub Release. It is **manual only**: GitHub -> Actions -> "Release" -> "Run
+workflow", enter a tag (e.g. `v0.1.0`). It produces a single universal macOS `.dmg`, a Windows
+installer, and a Linux `.AppImage`, attached to a **draft** Release. The binaries are **unsigned**:
+on macOS right-click the app and choose Open; on Windows choose "More info -> Run anyway".
+
+To take installers down later, delete the Release (and its tag) or remove individual assets - the
+download links 404 immediately. Anyone who already downloaded keeps their local copy.
 
 > The home route renders the **player workspace shell**: a resizable layout with a flat
 > playlist sidebar (the open video files, one row each, with a sort toggle in the header),
